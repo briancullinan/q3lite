@@ -9,15 +9,11 @@ glconfig_t  glConfig;
 qboolean    textureFilterAnisotropic = qfalse;
 int         maxAnisotropy = 0;
 float       displayAspect = 0.0f;
-qboolean    haveClampToEdge = qfalse;
 
 glstate_t	glState;
 
 static void GfxInfo_f( void );
 
-#ifdef USE_RENDERER_DLOPEN
-cvar_t  *com_altivec;
-#endif
 
 cvar_t	*r_flareSize;
 cvar_t	*r_flareFade;
@@ -991,9 +987,6 @@ R_Register
 */
 void R_Register( void ) 
 {
-	#ifdef USE_RENDERER_DLOPEN
-	com_altivec = ri.Cvar_Get("com_altivec", "1", CVAR_ARCHIVE);
-	#endif	
 
 	//
 	// latched and archived variables
@@ -1277,7 +1270,6 @@ void RE_Shutdown( qboolean destroyWindow ) {
 		textureFilterAnisotropic = qfalse;
 		maxAnisotropy = 0;
 		displayAspect = 0.0f;
-		haveClampToEdge = qfalse;
 
 		Com_Memset( &glState, 0, sizeof( glState ) );
 	}

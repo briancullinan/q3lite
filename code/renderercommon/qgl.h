@@ -10,8 +10,16 @@
 
 #ifdef USE_LOCAL_HEADERS
 #	include "SDL_opengl.h"
+#	include "SDL_opengles.h"
+#	include "SDL_egl.h"
 #else
 #	include <SDL_opengl.h>
+#	include <SDL_opengles.h>
+#	include <SDL_egl.h>
+#endif
+
+#ifndef APIENTRYP
+#define APIENTRYP APIENTRY *
 #endif
 
 extern void (APIENTRYP qglActiveTextureARB) (GLenum texture);
@@ -21,6 +29,7 @@ extern void (APIENTRYP qglMultiTexCoord2fARB) (GLenum target, GLfloat s, GLfloat
 extern void (APIENTRYP qglLockArraysEXT) (GLint first, GLsizei count);
 extern void (APIENTRYP qglUnlockArraysEXT) (void);
 
+extern void myglMultiTexCoord2f( GLenum texture, GLfloat s, GLfloat t );
 
 //===========================================================================
 
@@ -51,6 +60,7 @@ extern void (APIENTRYP qglUnlockArraysEXT) (void);
 	GLE(GLenum, GetError, void) \
 	GLE(void, GetIntegerv, GLenum pname, GLint *params) \
 	GLE(const GLubyte *, GetString, GLenum name) \
+	GLE(GLboolean, IsEnabled, GLenum cap) \
 	GLE(void, LineWidth, GLfloat width) \
 	GLE(void, PolygonOffset, GLfloat factor, GLfloat units) \
 	GLE(void, ReadPixels, GLint x, GLint y, GLsizei width, GLsizei height, GLenum format, GLenum type, GLvoid *pixels) \

@@ -20,12 +20,12 @@ cvar_t	*sv_rconPassword;		// password for remote server commands
 cvar_t	*sv_privatePassword;		// password for the privateClient slots
 cvar_t	*sv_allowDownload;
 cvar_t	*sv_maxclients;
+cvar_t	*sv_maxconcurrent;		// max number of connections per IP address
 
 cvar_t	*sv_privateClients;		// number of clients reserved for password
 cvar_t	*sv_hostname;
 cvar_t	*sv_master[MAX_MASTER_SERVERS];	// master server ip address
 cvar_t	*sv_reconnectlimit;		// minimum seconds between connect messages
-cvar_t	*sv_showloss;			// report when usercmds are lost
 cvar_t	*sv_padPackets;			// add nop bytes to messages
 cvar_t	*sv_killserver;			// menu system can set to 1 to shut server down
 cvar_t	*sv_mapname;
@@ -44,6 +44,7 @@ cvar_t	*sv_lanForceRate; // dedicated 1 (LAN) server forces local client rates t
 cvar_t	*sv_strictAuth;
 #endif
 cvar_t	*sv_banFile;
+cvar_t	*sv_inactivity;
 
 serverBan_t serverBans[SERVER_MAXBANS];
 int serverBansCount = 0;
@@ -517,14 +518,18 @@ static void SVC_Status( netadr_t from ) {
 	char	infostring[MAX_INFO_STRING];
 
 	// ignore if we are in single player
+#ifndef DEDICATED
 	if ( Cvar_VariableValue( "g_gametype" ) == GT_SINGLE_PLAYER || Cvar_VariableValue("ui_singlePlayerActive")) {
 		return;
 	}
+#endif
 
 	// Prevent using getstatus as an amplifier
 	if ( SVC_RateLimitAddress( from, 10, 1000 ) ) {
-		Com_DPrintf( "SVC_Status: rate limit from %s exceeded, dropping request\n",
+		if ( com_developer->integer ) {
+			Com_Printf( "SVC_Status: rate limit from %s exceeded, dropping request\n",
 			NET_AdrToString( from ) );
+		}
 		return;
 	}
 
@@ -566,6 +571,7 @@ static void SVC_Status( netadr_t from ) {
 	NET_OutOfBandPrint( NS_SERVER, from, "statusResponse\n%s\n%s", infostring, status );
 }
 
+
 /*
 ================
 SVC_Info
@@ -580,14 +586,18 @@ void SVC_Info( netadr_t from ) {
 	char	infostring[MAX_INFO_STRING];
 
 	// ignore if we are in single player
+#ifndef DEDICATED
 	if ( Cvar_VariableValue( "g_gametype" ) == GT_SINGLE_PLAYER || Cvar_VariableValue("ui_singlePlayerActive")) {
 		return;
 	}
+#endif
 
 	// Prevent using getinfo as an amplifier
 	if ( SVC_RateLimitAddress( from, 10, 1000 ) ) {
-		Com_DPrintf( "SVC_Info: rate limit from %s exceeded, dropping request\n",
+		if ( com_developer->integer ) {
+			Com_Printf( "SVC_Info: rate limit from %s exceeded, dropping request\n",
 			NET_AdrToString( from ) );
+		}
 		return;
 	}
 
@@ -693,8 +703,10 @@ static void SVC_RemoteCommand( netadr_t from, msg_t *msg ) {
 
 	// Prevent using rcon as an amplifier and make dictionary attacks impractical
 	if ( SVC_RateLimitAddress( from, 10, 1000 ) ) {
-		Com_DPrintf( "SVC_RemoteCommand: rate limit from %s exceeded, dropping request\n",
+		if ( com_developer->integer ) {
+			Com_Printf( "SVC_RemoteCommand: rate limit from %s exceeded, dropping request\n",
 			NET_AdrToString( from ) );
+		}
 		return;
 	}
 
@@ -766,6 +778,12 @@ static void SV_ConnectionlessPacket( netadr_t from, msg_t *msg ) {
 	MSG_ReadLong( msg );		// skip the -1 marker
 
 	if (!Q_strncmp("connect", (char *) &msg->data[4], 7)) {
+		if ( msg->cursize > MAX_INFO_STRING*2 ) { // if we assume 200% compression ratio on userinfo
+			if ( com_developer->integer ) {
+				Com_Printf( "%s : connect packet is too long - %i\n", NET_AdrToString( from ), msg->cursize );
+			}
+			return;
+		}
 		Huff_Decompress(msg, 12);
 	}
 
@@ -773,7 +791,10 @@ static void SV_ConnectionlessPacket( netadr_t from, msg_t *msg ) {
 	Cmd_TokenizeString( s );
 
 	c = Cmd_Argv(0);
-	Com_DPrintf ("SV packet %s : %s\n", NET_AdrToString(from), c);
+
+	if ( com_developer->integer ) {
+		Com_Printf( "SV packet %s : %s\n", NET_AdrToString( from ), c );
+	}
 
 	if (!Q_stricmp(c, "getstatus")) {
 		SVC_Status( from );
@@ -794,9 +815,11 @@ static void SV_ConnectionlessPacket( netadr_t from, msg_t *msg ) {
 		// server disconnect messages when their new server sees our final
 		// sequenced messages to the old client
 	} else {
-		Com_DPrintf ("bad connectionless packet from %s:\n%s\n",
+		if ( com_developer->integer ) {
+			Com_Printf( "bad connectionless packet from %s:\n%s\n",
 			NET_AdrToString (from), s);
 	}
+}
 }
 
 //============================================================================
@@ -892,7 +915,7 @@ static void SV_CalcPings( void ) {
 		total = 0;
 		count = 0;
 		for ( j = 0 ; j < PACKET_BACKUP ; j++ ) {
-			if ( cl->frames[j].messageAcked <= 0 ) {
+			if ( cl->frames[j].messageAcked == 0 ) {
 				continue;
 			}
 			delta = cl->frames[j].messageAcked - cl->frames[j].messageSent;
@@ -949,7 +972,7 @@ static void SV_CheckTimeouts( void ) {
 			cl->state = CS_FREE;	// can now be reused
 			continue;
 		}
-		if ( cl->state >= CS_CONNECTED && cl->lastPacketTime < droppoint) {
+		if ( cl->justConnected && cl->lastPacketTime < droppoint) {
 			// wait several frames so a debugger session doesn't
 			// cause a timeout
 			if ( ++cl->timeoutCount > 5 ) {

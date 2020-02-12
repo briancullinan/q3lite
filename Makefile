@@ -35,9 +35,6 @@ endif
 ifndef BUILD_RENDERER_OPENGL2
   BUILD_RENDERER_OPENGL2=
 endif
-ifndef BUILD_AUTOUPDATER  # DON'T build unless you mean to!
-  BUILD_AUTOUPDATER=0
-endif
 
 #############################################################################
 #
@@ -47,6 +44,7 @@ endif
 # causing problems with keeping up to date with the repository.
 #
 #############################################################################
+-include Makefile.q3lite
 -include Makefile.local
 
 ifeq ($(COMPILE_PLATFORM),cygwin)
@@ -104,15 +102,15 @@ endif
 export CROSS_COMPILING
 
 ifndef VERSION
-VERSION=1.36
+VERSION=v?
 endif
 
 ifndef CLIENTBIN
-CLIENTBIN=ioquake3
+CLIENTBIN=quake3
 endif
 
 ifndef SERVERBIN
-SERVERBIN=ioq3ded
+SERVERBIN=q3ded
 endif
 
 ifndef BASEGAME
@@ -231,10 +229,6 @@ ifndef USE_YACC
 USE_YACC=0
 endif
 
-ifndef USE_AUTOUPDATER  # DON'T include unless you mean to!
-USE_AUTOUPDATER=0
-endif
-
 ifndef DEBUG_CFLAGS
 DEBUG_CFLAGS=-ggdb -O0
 endif
@@ -246,6 +240,7 @@ BR=$(BUILD_DIR)/release-$(PLATFORM)-$(ARCH)
 CDIR=$(MOUNT_DIR)/client
 SDIR=$(MOUNT_DIR)/server
 RCOMMONDIR=$(MOUNT_DIR)/renderercommon
+RGLES1DIR=$(MOUNT_DIR)/renderergles1
 RGL1DIR=$(MOUNT_DIR)/renderergl1
 RGL2DIR=$(MOUNT_DIR)/renderergl2
 CMDIR=$(MOUNT_DIR)/qcommon
@@ -269,9 +264,6 @@ LBURGDIR=$(MOUNT_DIR)/tools/lcc/lburg
 Q3CPPDIR=$(MOUNT_DIR)/tools/lcc/cpp
 Q3LCCETCDIR=$(MOUNT_DIR)/tools/lcc/etc
 Q3LCCSRCDIR=$(MOUNT_DIR)/tools/lcc/src
-AUTOUPDATERSRCDIR=$(MOUNT_DIR)/autoupdater
-LIBTOMCRYPTSRCDIR=$(AUTOUPDATERSRCDIR)/rsa_tools/libtomcrypt-1.17
-TOMSFASTMATHSRCDIR=$(AUTOUPDATERSRCDIR)/rsa_tools/tomsfastmath-0.13.1
 LOKISETUPDIR=misc/setup
 NSISDIR=misc/nsis
 SDLHDIR=$(MOUNT_DIR)/SDL2
@@ -279,9 +271,8 @@ LIBSDIR=$(MOUNT_DIR)/libs
 
 bin_path=$(shell which $(1) 2> /dev/null)
 
-# The autoupdater uses curl, so figure out its flags no matter what.
 # We won't need this if we only build the server
-
+ifneq ($(BUILD_CLIENT),0)
 # set PKG_CONFIG_PATH or PKG_CONFIG to influence this, e.g.
 # PKG_CONFIG_PATH=/opt/cross/i386-mingw32msvc/lib/pkgconfig or
 # PKG_CONFIG=arm-linux-gnueabihf-pkg-config
@@ -309,13 +300,13 @@ else
   CURL_LIBS ?= -lcurl
   OPENAL_LIBS ?= -lopenal
 endif
-
 # Use sdl2-config if all else fails
 ifeq ($(SDL_CFLAGS),)
   ifneq ($(call bin_path, sdl2-config),)
     SDL_CFLAGS = $(shell sdl2-config --cflags)
     SDL_LIBS = $(shell sdl2-config --libs)
   endif
+endif
 endif
 
 # Add git version info
@@ -361,11 +352,11 @@ ifneq (,$(findstring "$(PLATFORM)", "linux" "gnu_kfreebsd" "kfreebsd-gnu" "gnu")
     HAVE_VM_COMPILED=true
   else
   ifeq ($(ARCH),ppc)
-    ALTIVEC_CFLAGS = -maltivec
+    BASE_CFLAGS += -maltivec
     HAVE_VM_COMPILED=true
   endif
   ifeq ($(ARCH),ppc64)
-    ALTIVEC_CFLAGS = -maltivec
+    BASE_CFLAGS += -maltivec
     HAVE_VM_COMPILED=true
   endif
   ifeq ($(ARCH),sparc)
@@ -390,7 +381,6 @@ ifneq (,$(findstring "$(PLATFORM)", "linux" "gnu_kfreebsd" "kfreebsd-gnu" "gnu")
 
   THREAD_LIBS=-lpthread
   LIBS=-ldl -lm
-  AUTOUPDATER_LIBS += -ldl
 
   CLIENT_LIBS=$(SDL_LIBS)
   RENDERER_LIBS = $(SDL_LIBS)
@@ -431,34 +421,26 @@ ifeq ($(PLATFORM),darwin)
   LIBS = -framework Cocoa
   CLIENT_LIBS=
   RENDERER_LIBS=
-  OPTIMIZEVM = -O3
+  OPTIMIZEVM=
 
   # Default minimum Mac OS X version
   ifeq ($(MACOSX_VERSION_MIN),)
     MACOSX_VERSION_MIN=10.7
   endif
 
-  MACOSX_MAJOR=$(shell echo $(MACOSX_VERSION_MIN) | cut -d. -f1)
-  MACOSX_MINOR=$(shell echo $(MACOSX_VERSION_MIN) | cut -d. -f2)
-  ifeq ($(shell test $(MACOSX_MINOR) -gt 9; echo $$?),0)
-    # Multiply and then remove decimal. 10.10 -> 101000.0 -> 101000
-    MAC_OS_X_VERSION_MIN_REQUIRED=$(shell echo "$(MACOSX_MAJOR) * 10000 + $(MACOSX_MINOR) * 100" | bc | cut -d. -f1)
-  else
     # Multiply by 100 and then remove decimal. 10.7 -> 1070.0 -> 1070
-    MAC_OS_X_VERSION_MIN_REQUIRED=$(shell echo "$(MACOSX_VERSION_MIN) * 100" | bc | cut -d. -f1)
-  endif
+  MAC_OS_X_VERSION_MIN_REQUIRED=$(shell echo '$(MACOSX_VERSION_MIN) * 100' | bc | cut -d. -f1)
 
   LDFLAGS += -mmacosx-version-min=$(MACOSX_VERSION_MIN)
   BASE_CFLAGS += -mmacosx-version-min=$(MACOSX_VERSION_MIN) \
                  -DMAC_OS_X_VERSION_MIN_REQUIRED=$(MAC_OS_X_VERSION_MIN_REQUIRED)
 
   ifeq ($(ARCH),ppc)
-    BASE_CFLAGS += -arch ppc
-    ALTIVEC_CFLAGS = -faltivec
+    BASE_CFLAGS += -arch ppc -faltivec
+    OPTIMIZEVM += -O3
   endif
   ifeq ($(ARCH),ppc64)
-    BASE_CFLAGS += -arch ppc64
-    ALTIVEC_CFLAGS = -faltivec
+    BASE_CFLAGS += -arch ppc64 -faltivec
   endif
   ifeq ($(ARCH),x86)
     OPTIMIZEVM += -march=prescott -mfpmath=sse
@@ -495,9 +477,6 @@ ifeq ($(PLATFORM),darwin)
   BASE_CFLAGS += -fno-strict-aliasing -fno-common -pipe
 
   ifeq ($(USE_OPENAL),1)
-    ifneq ($(USE_LOCAL_HEADERS),1)
-      CLIENT_CFLAGS += -I/System/Library/Frameworks/OpenAL.framework/Headers
-    endif
     ifneq ($(USE_OPENAL_DLOPEN),1)
       CLIENT_LIBS += -framework OpenAL
     endif
@@ -512,14 +491,10 @@ ifeq ($(PLATFORM),darwin)
 
   BASE_CFLAGS += -D_THREAD_SAFE=1
 
-  CLIENT_LIBS += -framework IOKit
-  RENDERER_LIBS += -framework OpenGL
-
+  # FIXME: It is not possible to build using system SDL2 framework
+  #  1. IF you try, this Makefile will still drop libSDL-2.0.0.dylib into the builddir
+  #  2. Debugger warns that you have 2- which one will be used is undefined
   ifeq ($(USE_LOCAL_HEADERS),1)
-    # libSDL2-2.0.0.dylib for PPC is SDL 2.0.1 + changes to compile
-    ifneq ($(findstring $(ARCH),ppc ppc64),)
-      BASE_CFLAGS += -I$(SDLHDIR)/include-macppc
-    else
       BASE_CFLAGS += -I$(SDLHDIR)/include
     endif
 
@@ -527,14 +502,10 @@ ifeq ($(PLATFORM),darwin)
     #  the file has been modified by each build.
     LIBSDLMAIN=$(B)/libSDL2main.a
     LIBSDLMAINSRC=$(LIBSDIR)/macosx/libSDL2main.a
-    CLIENT_LIBS += $(LIBSDIR)/macosx/libSDL2-2.0.0.dylib
-    RENDERER_LIBS += $(LIBSDIR)/macosx/libSDL2-2.0.0.dylib
+  CLIENT_LIBS += -framework IOKit \
+    $(LIBSDIR)/macosx/libSDL2-2.0.0.dylib
+  RENDERER_LIBS += -framework OpenGL $(LIBSDIR)/macosx/libSDL2-2.0.0.dylib
     CLIENT_EXTRA_FILES += $(LIBSDIR)/macosx/libSDL2-2.0.0.dylib
-  else
-    BASE_CFLAGS += -I/Library/Frameworks/SDL2.framework/Headers
-    CLIENT_LIBS += -framework SDL2
-    RENDERER_LIBS += -framework SDL2
-  endif
 
   OPTIMIZE = $(OPTIMIZEVM) -ffast-math
 
@@ -637,8 +608,6 @@ ifdef MINGW
   endif
 
   LIBS= -lws2_32 -lwinmm -lpsapi
-  AUTOUPDATER_LIBS += -lwininet
-
   # clang 3.4 doesn't support this
   ifneq ("$(CC)", $(findstring "$(CC)", "clang" "clang++"))
     CLIENT_LDFLAGS += -mwindows
@@ -783,11 +752,11 @@ ifeq ($(PLATFORM),openbsd)
     HAVE_VM_COMPILED=true
   else
   ifeq ($(ARCH),ppc)
-    ALTIVEC_CFLAGS = -maltivec
+    BASE_CFLAGS += -maltivec
     HAVE_VM_COMPILED=true
   endif
   ifeq ($(ARCH),ppc64)
-    ALTIVEC_CFLAGS = -maltivec
+    BASE_CFLAGS += -maltivec
     HAVE_VM_COMPILED=true
   endif
   ifeq ($(ARCH),sparc64)
@@ -878,8 +847,6 @@ ifeq ($(PLATFORM),irix64)
   SHLIBLDFLAGS=-shared
 
   LIBS=-ldl -lm -lgen
-  AUTOUPDATER_LIBS += -ldl
-
   # FIXME: The X libraries probably aren't necessary?
   CLIENT_LIBS=-L/usr/X11/$(LIB) $(SDL_LIBS) \
     -lX11 -lXext -lm
@@ -934,7 +901,6 @@ ifeq ($(PLATFORM),sunos)
 
   THREAD_LIBS=-lpthread
   LIBS=-lsocket -lnsl -ldl -lm
-  AUTOUPDATER_LIBS += -ldl
 
   BOTCFLAGS=-O0
 
@@ -991,14 +957,11 @@ endif
 
 ifneq ($(BUILD_CLIENT),0)
   ifneq ($(USE_RENDERER_DLOPEN),0)
-    TARGETS += $(B)/$(CLIENTBIN)$(FULLBINEXT) $(B)/renderer_opengl1_$(SHLIBNAME)
-    ifneq ($(BUILD_RENDERER_OPENGL2),0)
-      TARGETS += $(B)/renderer_opengl2_$(SHLIBNAME)
-    endif
-  else
     TARGETS += $(B)/$(CLIENTBIN)$(FULLBINEXT)
-    ifneq ($(BUILD_RENDERER_OPENGL2),0)
-      TARGETS += $(B)/$(CLIENTBIN)_opengl2$(FULLBINEXT)
+    TARGETS += $(B)/renderer_opengles1_$(SHLIBNAME)
+    TARGETS += $(B)/renderer_opengl1_$(SHLIBNAME)
+    ifeq ($(BUILD_RENDERER_OPENGL2),1)
+      TARGETS += $(B)/renderer_opengl2_$(SHLIBNAME)
     endif
   endif
 endif
@@ -1031,16 +994,6 @@ ifneq ($(BUILD_GAME_QVM),0)
       $(B)/$(MISSIONPACK)/vm/qagame.qvm \
       $(B)/$(MISSIONPACK)/vm/ui.qvm
   endif
-endif
-
-ifneq ($(BUILD_AUTOUPDATER),0)
-  # PLEASE NOTE that if you run an exe on Windows Vista or later
-  #  with "setup", "install", "update" or other related terms, it
-  #  will unconditionally trigger a UAC prompt, and in the case of
-  #  ioq3 calling CreateProcess() on it, it'll just fail immediately.
-  #  So don't call this thing "autoupdater" here!
-  AUTOUPDATER_BIN := autosyncerator$(FULLBINEXT)
-  TARGETS += $(B)/$(AUTOUPDATER_BIN)
 endif
 
 ifeq ($(USE_OPENAL),1)
@@ -1143,15 +1096,6 @@ ifeq ($(USE_FREETYPE),1)
   RENDERER_LIBS += $(FREETYPE_LIBS)
 endif
 
-ifeq ($(USE_AUTOUPDATER),1)
-  CLIENT_CFLAGS += -DUSE_AUTOUPDATER -DAUTOUPDATER_BIN=\\\"$(AUTOUPDATER_BIN)\\\"
-  SERVER_CFLAGS += -DUSE_AUTOUPDATER -DAUTOUPDATER_BIN=\\\"$(AUTOUPDATER_BIN)\\\"
-endif
-
-ifeq ($(BUILD_AUTOUPDATER),1)
-  AUTOUPDATER_LIBS += $(LIBTOMCRYPTSRCDIR)/libtomcrypt.a $(TOMSFASTMATHSRCDIR)/libtfm.a
-endif
-
 ifeq ("$(CC)", $(findstring "$(CC)", "clang" "clang++"))
   BASE_CFLAGS += -Qunused-arguments
 endif
@@ -1204,19 +1148,9 @@ $(echo_cmd) "CC $<"
 $(Q)$(CC) $(NOTSHLIBCFLAGS) $(CFLAGS) $(CLIENT_CFLAGS) $(OPTIMIZE) -o $@ -c $<
 endef
 
-define DO_CC_ALTIVEC
-$(echo_cmd) "CC $<"
-$(Q)$(CC) $(NOTSHLIBCFLAGS) $(CFLAGS) $(CLIENT_CFLAGS) $(OPTIMIZE) $(ALTIVEC_CFLAGS) -o $@ -c $<
-endef
-
 define DO_REF_CC
 $(echo_cmd) "REF_CC $<"
 $(Q)$(CC) $(SHLIBCFLAGS) $(CFLAGS) $(CLIENT_CFLAGS) $(OPTIMIZE) -o $@ -c $<
-endef
-
-define DO_REF_CC_ALTIVEC
-$(echo_cmd) "REF_CC $<"
-$(Q)$(CC) $(SHLIBCFLAGS) $(CFLAGS) $(CLIENT_CFLAGS) $(OPTIMIZE) $(ALTIVEC_CFLAGS) -o $@ -c $<
 endef
 
 define DO_REF_STR
@@ -1394,9 +1328,6 @@ endif
 	@echo "  CLIENT_LIBS:"
 	$(call print_wrapped, $(CLIENT_LIBS))
 	@echo ""
-	@echo "  AUTOUPDATER_LIBS:"
-	$(call print_wrapped, $(AUTOUPDATER_LIBS))
-	@echo ""
 	@echo "  Output:"
 	$(call print_list, $(NAKED_TARGETS))
 	@echo ""
@@ -1420,9 +1351,9 @@ ifneq ($(PLATFORM),darwin)
 endif
 
 makedirs:
-	@$(MKDIR) $(B)/autoupdater
 	@$(MKDIR) $(B)/client/opus
 	@$(MKDIR) $(B)/client/vorbis
+	@$(MKDIR) $(B)/renderergles1
 	@$(MKDIR) $(B)/renderergl1
 	@$(MKDIR) $(B)/renderergl2
 	@$(MKDIR) $(B)/renderergl2/glsl
@@ -1442,6 +1373,34 @@ makedirs:
 	@$(MKDIR) $(B)/tools/rcc
 	@$(MKDIR) $(B)/tools/cpp
 	@$(MKDIR) $(B)/tools/lburg
+	@if [ ! -d $(BUILD_DIR) ];then $(MKDIR) $(BUILD_DIR);fi
+	@if [ ! -d $(B) ];then $(MKDIR) $(B);fi
+	@if [ ! -d $(B)/client ];then $(MKDIR) $(B)/client;fi
+	@if [ ! -d $(B)/client/opus ];then $(MKDIR) $(B)/client/opus;fi
+	@if [ ! -d $(B)/client/vorbis ];then $(MKDIR) $(B)/client/vorbis;fi
+	@if [ ! -d $(B)/renderergles1 ];then $(MKDIR) $(B)/renderergles1;fi
+	@if [ ! -d $(B)/renderergl1 ];then $(MKDIR) $(B)/renderergl1;fi
+	@if [ ! -d $(B)/renderergl2 ];then $(MKDIR) $(B)/renderergl2;fi
+	@if [ ! -d $(B)/renderergl2/glsl ];then $(MKDIR) $(B)/renderergl2/glsl;fi
+	@if [ ! -d $(B)/ded ];then $(MKDIR) $(B)/ded;fi
+	@if [ ! -d $(B)/$(BASEGAME) ];then $(MKDIR) $(B)/$(BASEGAME);fi
+	@if [ ! -d $(B)/$(BASEGAME)/cgame ];then $(MKDIR) $(B)/$(BASEGAME)/cgame;fi
+	@if [ ! -d $(B)/$(BASEGAME)/game ];then $(MKDIR) $(B)/$(BASEGAME)/game;fi
+	@if [ ! -d $(B)/$(BASEGAME)/ui ];then $(MKDIR) $(B)/$(BASEGAME)/ui;fi
+	@if [ ! -d $(B)/$(BASEGAME)/qcommon ];then $(MKDIR) $(B)/$(BASEGAME)/qcommon;fi
+	@if [ ! -d $(B)/$(BASEGAME)/vm ];then $(MKDIR) $(B)/$(BASEGAME)/vm;fi
+	@if [ ! -d $(B)/$(MISSIONPACK) ];then $(MKDIR) $(B)/$(MISSIONPACK);fi
+	@if [ ! -d $(B)/$(MISSIONPACK)/cgame ];then $(MKDIR) $(B)/$(MISSIONPACK)/cgame;fi
+	@if [ ! -d $(B)/$(MISSIONPACK)/game ];then $(MKDIR) $(B)/$(MISSIONPACK)/game;fi
+	@if [ ! -d $(B)/$(MISSIONPACK)/ui ];then $(MKDIR) $(B)/$(MISSIONPACK)/ui;fi
+	@if [ ! -d $(B)/$(MISSIONPACK)/qcommon ];then $(MKDIR) $(B)/$(MISSIONPACK)/qcommon;fi
+	@if [ ! -d $(B)/$(MISSIONPACK)/vm ];then $(MKDIR) $(B)/$(MISSIONPACK)/vm;fi
+	@if [ ! -d $(B)/tools ];then $(MKDIR) $(B)/tools;fi
+	@if [ ! -d $(B)/tools/asm ];then $(MKDIR) $(B)/tools/asm;fi
+	@if [ ! -d $(B)/tools/etc ];then $(MKDIR) $(B)/tools/etc;fi
+	@if [ ! -d $(B)/tools/rcc ];then $(MKDIR) $(B)/tools/rcc;fi
+	@if [ ! -d $(B)/tools/cpp ];then $(MKDIR) $(B)/tools/cpp;fi
+	@if [ ! -d $(B)/tools/lburg ];then $(MKDIR) $(B)/tools/lburg;fi
 
 #############################################################################
 # QVM BUILD TOOLS
@@ -1637,26 +1596,6 @@ $(Q3ASM): $(Q3ASMOBJ)
 
 
 #############################################################################
-# AUTOUPDATER
-#############################################################################
-
-define DO_AUTOUPDATER_CC
-$(echo_cmd) "AUTOUPDATER_CC $<"
-$(Q)$(CC) $(CFLAGS) -I$(LIBTOMCRYPTSRCDIR)/src/headers -I$(TOMSFASTMATHSRCDIR)/src/headers $(CURL_CFLAGS) -o $@ -c $<
-endef
-
-Q3AUTOUPDATEROBJ = \
-  $(B)/autoupdater/autoupdater.o
-
-$(B)/autoupdater/%.o: $(AUTOUPDATERSRCDIR)/%.c
-	$(DO_AUTOUPDATER_CC)
-
-$(B)/$(AUTOUPDATER_BIN): $(Q3AUTOUPDATEROBJ)
-	$(echo_cmd) "AUTOUPDATER_LD $@"
-	$(Q)$(CC) $(LDFLAGS) -o $@ $(Q3AUTOUPDATEROBJ) $(AUTOUPDATER_LIBS)
-
-
-#############################################################################
 # CLIENT/SERVER
 #############################################################################
 
@@ -1689,8 +1628,8 @@ Q3OBJ = \
   $(B)/client/net_chan.o \
   $(B)/client/net_ip.o \
   $(B)/client/huffman.o \
+  $(B)/client/huffman_static.o \
   \
-  $(B)/client/snd_altivec.o \
   $(B)/client/snd_adpcm.o \
   $(B)/client/snd_dma.o \
   $(B)/client/snd_mem.o \
@@ -1760,7 +1699,6 @@ Q3OBJ = \
   $(B)/client/sdl_snd.o \
   \
   $(B)/client/con_log.o \
-  $(B)/client/sys_autoupdater.o \
   $(B)/client/sys_main.o
 
 ifdef MINGW
@@ -1810,8 +1748,8 @@ Q3R2OBJ = \
   $(B)/renderergl2/tr_vbo.o \
   $(B)/renderergl2/tr_world.o \
   \
-  $(B)/renderergl1/sdl_gamma.o \
-  $(B)/renderergl1/sdl_glimp.o
+  $(B)/renderergles1/sdl_gamma.o \
+  $(B)/renderergles1/sdl_glimp.o
 
 Q3R2STRINGOBJ = \
   $(B)/renderergl2/glsl/bokeh_fp.o \
@@ -1843,8 +1781,41 @@ Q3R2STRINGOBJ = \
   $(B)/renderergl2/glsl/tonemap_fp.o \
   $(B)/renderergl2/glsl/tonemap_vp.o
 
+Q3RESOBJ = \
+  $(B)/renderergles1/tr_animation.o \
+  $(B)/renderergles1/tr_backend.o \
+  $(B)/renderergles1/tr_bsp.o \
+  $(B)/renderergles1/tr_cmds.o \
+  $(B)/renderergles1/tr_curve.o \
+  $(B)/renderergles1/tr_flares.o \
+  $(B)/renderergles1/tr_font.o \
+  $(B)/renderergles1/tr_image.o \
+  $(B)/renderergles1/tr_image_bmp.o \
+  $(B)/renderergles1/tr_image_jpg.o \
+  $(B)/renderergles1/tr_image_pcx.o \
+  $(B)/renderergles1/tr_image_png.o \
+  $(B)/renderergles1/tr_image_tga.o \
+  $(B)/renderergles1/tr_init.o \
+  $(B)/renderergles1/tr_light.o \
+  $(B)/renderergles1/tr_main.o \
+  $(B)/renderergles1/tr_marks.o \
+  $(B)/renderergles1/tr_mesh.o \
+  $(B)/renderergles1/tr_model.o \
+  $(B)/renderergles1/tr_model_iqm.o \
+  $(B)/renderergles1/tr_noise.o \
+  $(B)/renderergles1/tr_scene.o \
+  $(B)/renderergles1/tr_shade.o \
+  $(B)/renderergles1/tr_shade_calc.o \
+  $(B)/renderergles1/tr_shader.o \
+  $(B)/renderergles1/tr_shadows.o \
+  $(B)/renderergles1/tr_sky.o \
+  $(B)/renderergles1/tr_surface.o \
+  $(B)/renderergles1/tr_world.o \
+  \
+  $(B)/renderergles1/sdl_gamma.o \
+  $(B)/renderergles1/sdl_glimp.o
+
 Q3ROBJ = \
-  $(B)/renderergl1/tr_altivec.o \
   $(B)/renderergl1/tr_animation.o \
   $(B)/renderergl1/tr_backend.o \
   $(B)/renderergl1/tr_bsp.o \
@@ -1875,71 +1846,77 @@ Q3ROBJ = \
   $(B)/renderergl1/tr_surface.o \
   $(B)/renderergl1/tr_world.o \
   \
-  $(B)/renderergl1/sdl_gamma.o \
-  $(B)/renderergl1/sdl_glimp.o
+  $(B)/renderergles1/sdl_gamma.o \
+  $(B)/renderergles1/sdl_glimp.o
 
 ifneq ($(USE_RENDERER_DLOPEN), 0)
+  Q3RESOBJ += \
+    $(B)/renderergles1/q_shared.o \
+    $(B)/renderergles1/puff.o \
+    $(B)/renderergles1/q_math.o \
+    $(B)/renderergles1/tr_subs.o
+
   Q3ROBJ += \
-    $(B)/renderergl1/q_shared.o \
-    $(B)/renderergl1/puff.o \
-    $(B)/renderergl1/q_math.o \
-    $(B)/renderergl1/tr_subs.o
+    $(B)/renderergles1/q_shared.o \
+    $(B)/renderergles1/puff.o \
+    $(B)/renderergles1/q_math.o \
+    $(B)/renderergles1/tr_subs.o
 
   Q3R2OBJ += \
-    $(B)/renderergl1/q_shared.o \
-    $(B)/renderergl1/puff.o \
-    $(B)/renderergl1/q_math.o \
-    $(B)/renderergl1/tr_subs.o
+    $(B)/renderergles1/q_shared.o \
+    $(B)/renderergles1/puff.o \
+    $(B)/renderergles1/q_math.o \
+    $(B)/renderergles1/tr_subs.o
 endif
 
 ifneq ($(USE_INTERNAL_JPEG),0)
   JPGOBJ = \
-    $(B)/renderergl1/jaricom.o \
-    $(B)/renderergl1/jcapimin.o \
-    $(B)/renderergl1/jcapistd.o \
-    $(B)/renderergl1/jcarith.o \
-    $(B)/renderergl1/jccoefct.o  \
-    $(B)/renderergl1/jccolor.o \
-    $(B)/renderergl1/jcdctmgr.o \
-    $(B)/renderergl1/jchuff.o   \
-    $(B)/renderergl1/jcinit.o \
-    $(B)/renderergl1/jcmainct.o \
-    $(B)/renderergl1/jcmarker.o \
-    $(B)/renderergl1/jcmaster.o \
-    $(B)/renderergl1/jcomapi.o \
-    $(B)/renderergl1/jcparam.o \
-    $(B)/renderergl1/jcprepct.o \
-    $(B)/renderergl1/jcsample.o \
-    $(B)/renderergl1/jctrans.o \
-    $(B)/renderergl1/jdapimin.o \
-    $(B)/renderergl1/jdapistd.o \
-    $(B)/renderergl1/jdarith.o \
-    $(B)/renderergl1/jdatadst.o \
-    $(B)/renderergl1/jdatasrc.o \
-    $(B)/renderergl1/jdcoefct.o \
-    $(B)/renderergl1/jdcolor.o \
-    $(B)/renderergl1/jddctmgr.o \
-    $(B)/renderergl1/jdhuff.o \
-    $(B)/renderergl1/jdinput.o \
-    $(B)/renderergl1/jdmainct.o \
-    $(B)/renderergl1/jdmarker.o \
-    $(B)/renderergl1/jdmaster.o \
-    $(B)/renderergl1/jdmerge.o \
-    $(B)/renderergl1/jdpostct.o \
-    $(B)/renderergl1/jdsample.o \
-    $(B)/renderergl1/jdtrans.o \
-    $(B)/renderergl1/jerror.o \
-    $(B)/renderergl1/jfdctflt.o \
-    $(B)/renderergl1/jfdctfst.o \
-    $(B)/renderergl1/jfdctint.o \
-    $(B)/renderergl1/jidctflt.o \
-    $(B)/renderergl1/jidctfst.o \
-    $(B)/renderergl1/jidctint.o \
-    $(B)/renderergl1/jmemmgr.o \
-    $(B)/renderergl1/jmemnobs.o \
-    $(B)/renderergl1/jquant1.o \
-    $(B)/renderergl1/jquant2.o \
-    $(B)/renderergl1/jutils.o
+    $(B)/renderergles1/jaricom.o \
+    $(B)/renderergles1/jcapimin.o \
+    $(B)/renderergles1/jcapistd.o \
+    $(B)/renderergles1/jcarith.o \
+    $(B)/renderergles1/jccoefct.o  \
+    $(B)/renderergles1/jccolor.o \
+    $(B)/renderergles1/jcdctmgr.o \
+    $(B)/renderergles1/jchuff.o   \
+    $(B)/renderergles1/jcinit.o \
+    $(B)/renderergles1/jcmainct.o \
+    $(B)/renderergles1/jcmarker.o \
+    $(B)/renderergles1/jcmaster.o \
+    $(B)/renderergles1/jcomapi.o \
+    $(B)/renderergles1/jcparam.o \
+    $(B)/renderergles1/jcprepct.o \
+    $(B)/renderergles1/jcsample.o \
+    $(B)/renderergles1/jctrans.o \
+    $(B)/renderergles1/jdapimin.o \
+    $(B)/renderergles1/jdapistd.o \
+    $(B)/renderergles1/jdarith.o \
+    $(B)/renderergles1/jdatadst.o \
+    $(B)/renderergles1/jdatasrc.o \
+    $(B)/renderergles1/jdcoefct.o \
+    $(B)/renderergles1/jdcolor.o \
+    $(B)/renderergles1/jddctmgr.o \
+    $(B)/renderergles1/jdhuff.o \
+    $(B)/renderergles1/jdinput.o \
+    $(B)/renderergles1/jdmainct.o \
+    $(B)/renderergles1/jdmarker.o \
+    $(B)/renderergles1/jdmaster.o \
+    $(B)/renderergles1/jdmerge.o \
+    $(B)/renderergles1/jdpostct.o \
+    $(B)/renderergles1/jdsample.o \
+    $(B)/renderergles1/jdtrans.o \
+    $(B)/renderergles1/jerror.o \
+    $(B)/renderergles1/jfdctflt.o \
+    $(B)/renderergles1/jfdctfst.o \
+    $(B)/renderergles1/jfdctint.o \
+    $(B)/renderergles1/jidctflt.o \
+    $(B)/renderergles1/jidctfst.o \
+    $(B)/renderergles1/jidctint.o \
+    $(B)/renderergles1/jmemmgr.o \
+    $(B)/renderergles1/jmemnobs.o \
+    $(B)/renderergles1/jquant1.o \
+    $(B)/renderergles1/jquant2.o \
+    $(B)/renderergles1/jutils.o
 endif
 
 ifeq ($(ARCH),x86)
@@ -2191,6 +2168,11 @@ $(B)/$(CLIENTBIN)$(FULLBINEXT): $(Q3OBJ) $(LIBSDLMAIN)
 		-o $@ $(Q3OBJ) \
 		$(LIBSDLMAIN) $(CLIENT_LIBS) $(LIBS)
 
+$(B)/renderer_opengles1_$(SHLIBNAME): $(Q3RESOBJ) $(JPGOBJ)
+	$(echo_cmd) "LD $@"
+	$(Q)$(CC) $(CFLAGS) $(SHLIBLDFLAGS) -o $@ $(Q3RESOBJ) $(JPGOBJ) \
+		$(THREAD_LIBS) $(LIBSDLMAIN) $(RENDERER_LIBS) $(LIBS)
+
 $(B)/renderer_opengl1_$(SHLIBNAME): $(Q3ROBJ) $(JPGOBJ)
 	$(echo_cmd) "LD $@"
 	$(Q)$(CC) $(CFLAGS) $(SHLIBLDFLAGS) -o $@ $(Q3ROBJ) $(JPGOBJ) \
@@ -2201,7 +2183,13 @@ $(B)/renderer_opengl2_$(SHLIBNAME): $(Q3R2OBJ) $(Q3R2STRINGOBJ) $(JPGOBJ)
 	$(Q)$(CC) $(CFLAGS) $(SHLIBLDFLAGS) -o $@ $(Q3R2OBJ) $(Q3R2STRINGOBJ) $(JPGOBJ) \
 		$(THREAD_LIBS) $(LIBSDLMAIN) $(RENDERER_LIBS) $(LIBS)
 else
-$(B)/$(CLIENTBIN)$(FULLBINEXT): $(Q3OBJ) $(Q3ROBJ) $(JPGOBJ) $(LIBSDLMAIN)
+$(B)/$(CLIENTBIN)$(FULLBINEXT): $(Q3OBJ) $(Q3RESOBJ) $(JPGOBJ) $(LIBSDLMAIN)
+	$(echo_cmd) "LD $@"
+	$(Q)$(CC) $(CLIENT_CFLAGS) $(CFLAGS) $(CLIENT_LDFLAGS) $(LDFLAGS) $(NOTSHLIBLDFLAGS) \
+		-o $@ $(Q3OBJ) $(Q3RESOBJ) $(JPGOBJ) \
+		$(LIBSDLMAIN) $(CLIENT_LIBS) $(RENDERER_LIBS) $(LIBS)
+
+$(B)/$(CLIENTBIN)_opengl1$(FULLBINEXT): $(Q3OBJ) $(Q3ROBJ) $(JPGOBJ) $(LIBSDLMAIN)
 	$(echo_cmd) "LD $@"
 	$(Q)$(CC) $(CLIENT_CFLAGS) $(CFLAGS) $(CLIENT_LDFLAGS) $(LDFLAGS) $(NOTSHLIBLDFLAGS) \
 		-o $@ $(Q3OBJ) $(Q3ROBJ) $(JPGOBJ) \
@@ -2253,6 +2241,7 @@ Q3DOBJ = \
   $(B)/ded/net_chan.o \
   $(B)/ded/net_ip.o \
   $(B)/ded/huffman.o \
+  $(B)/ded/huffman_static.o \
   \
   $(B)/ded/q_math.o \
   $(B)/ded/q_shared.o \
@@ -2296,7 +2285,6 @@ Q3DOBJ = \
   $(B)/ded/null_snddma.o \
   \
   $(B)/ded/con_log.o \
-  $(B)/ded/sys_autoupdater.o \
   $(B)/ded/sys_main.o
 
 ifeq ($(ARCH),x86)
@@ -2655,9 +2643,6 @@ $(B)/client/%.o: $(ASMDIR)/%.s
 $(B)/client/%.o: $(ASMDIR)/%.c
 	$(DO_CC) -march=k8
 
-$(B)/client/snd_altivec.o: $(CDIR)/snd_altivec.c
-	$(DO_CC_ALTIVEC)
-
 $(B)/client/%.o: $(CDIR)/%.c
 	$(DO_CC)
 
@@ -2707,6 +2692,22 @@ $(B)/client/win_resource.o: $(SYSDIR)/win_resource.rc $(SYSDIR)/win_manifest.xml
 	$(DO_WINDRES)
 
 
+$(B)/renderergles1/%.o: $(CMDIR)/%.c
+	$(DO_REF_CC)
+
+$(B)/renderergles1/%.o: $(SDLDIR)/%.c
+	$(DO_REF_CC)
+
+$(B)/renderergles1/%.o: $(JPDIR)/%.c
+	$(DO_REF_CC)
+
+$(B)/renderergles1/%.o: $(RCOMMONDIR)/%.c
+	$(DO_REF_CC)
+
+$(B)/renderergles1/%.o: $(RGLES1DIR)/%.c
+	$(DO_REF_CC)
+
+
 $(B)/renderergl1/%.o: $(CMDIR)/%.c
 	$(DO_REF_CC)
 
@@ -2722,8 +2723,6 @@ $(B)/renderergl1/%.o: $(RCOMMONDIR)/%.c
 $(B)/renderergl1/%.o: $(RGL1DIR)/%.c
 	$(DO_REF_CC)
 
-$(B)/renderergl1/tr_altivec.o: $(RGL1DIR)/tr_altivec.c
-	$(DO_REF_CC_ALTIVEC)
 
 $(B)/renderergl2/glsl/%.c: $(RGL2DIR)/glsl/%.glsl
 	$(DO_REF_STR)
@@ -2861,7 +2860,7 @@ $(B)/$(MISSIONPACK)/qcommon/%.asm: $(CMDIR)/%.c $(Q3LCC)
 # MISC
 #############################################################################
 
-OBJ = $(Q3OBJ) $(Q3ROBJ) $(Q3R2OBJ) $(Q3DOBJ) $(JPGOBJ) \
+OBJ = $(Q3OBJ) $(Q3RESOBJ) $(Q3ROBJ) $(Q3R2OBJ) $(Q3DOBJ) $(JPGOBJ) \
   $(MPGOBJ) $(Q3GOBJ) $(Q3CGOBJ) $(MPCGOBJ) $(Q3UIOBJ) $(MPUIOBJ) \
   $(MPGVMOBJ) $(Q3GVMOBJ) $(Q3CGVMOBJ) $(MPCGVMOBJ) $(Q3UIVMOBJ) $(MPUIVMOBJ)
 TOOLSOBJ = $(LBURGOBJ) $(Q3CPPOBJ) $(Q3RCCOBJ) $(Q3LCCOBJ) $(Q3ASMOBJ)
@@ -2882,11 +2881,14 @@ endif
 ifneq ($(BUILD_CLIENT),0)
 	$(INSTALL) $(STRIP_FLAG) -m 0755 $(BR)/$(CLIENTBIN)$(FULLBINEXT) $(COPYBINDIR)/$(CLIENTBIN)$(FULLBINEXT)
   ifneq ($(USE_RENDERER_DLOPEN),0)
+	$(INSTALL) $(STRIP_FLAG) -m 0755 $(BR)/renderer_opengles1_$(SHLIBNAME) $(COPYBINDIR)/renderer_opengles1_$(SHLIBNAME)
 	$(INSTALL) $(STRIP_FLAG) -m 0755 $(BR)/renderer_opengl1_$(SHLIBNAME) $(COPYBINDIR)/renderer_opengl1_$(SHLIBNAME)
     ifneq ($(BUILD_RENDERER_OPENGL2),0)
 	$(INSTALL) $(STRIP_FLAG) -m 0755 $(BR)/renderer_opengl2_$(SHLIBNAME) $(COPYBINDIR)/renderer_opengl2_$(SHLIBNAME)
     endif
   else
+	$(INSTALL) $(STRIP_FLAG) -m 0755 $(BR)/$(CLIENTBIN)_opengles1$(FULLBINEXT) $(COPYBINDIR)/$(CLIENTBIN)_opengles1$(FULLBINEXT)
+	$(INSTALL) $(STRIP_FLAG) -m 0755 $(BR)/$(CLIENTBIN)_opengl1$(FULLBINEXT) $(COPYBINDIR)/$(CLIENTBIN)_opengl1$(FULLBINEXT)
     ifneq ($(BUILD_RENDERER_OPENGL2),0)
 	$(INSTALL) $(STRIP_FLAG) -m 0755 $(BR)/$(CLIENTBIN)_opengl2$(FULLBINEXT) $(COPYBINDIR)/$(CLIENTBIN)_opengl2$(FULLBINEXT)
     endif

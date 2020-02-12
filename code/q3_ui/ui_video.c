@@ -340,7 +340,6 @@ static int resToRatio[ MAX_RESOLUTIONS ];
 
 static char resbuf[ MAX_STRING_CHARS ];
 static const char* detectedResolutions[ MAX_RESOLUTIONS ];
-static char currentResolution[ 20 ];
 
 static const char** resolutions = builtinResolutions;
 static qboolean resolutionsDetected = qfalse;
@@ -470,7 +469,7 @@ GraphicsOptions_GetResolutions
 */
 static void GraphicsOptions_GetResolutions( void )
 {
-	trap_Cvar_VariableStringBuffer("r_availableModes", resbuf, sizeof(resbuf));
+	Q_strncpyz(resbuf, UI_Cvar_VariableString("r_availableModes"), sizeof(resbuf));
 	if(*resbuf)
 	{
 		char* s = resbuf;
@@ -484,27 +483,12 @@ static void GraphicsOptions_GetResolutions( void )
 		}
 		detectedResolutions[ i ] = NULL;
 
-		// add custom resolution if not in mode list
-		if ( i < ARRAY_LEN(detectedResolutions)-1 )
+		if( i > 0 )
 		{
-			Com_sprintf( currentResolution, sizeof ( currentResolution ), "%dx%d", uis.glconfig.vidWidth, uis.glconfig.vidHeight );
-
-			for( i = 0; detectedResolutions[ i ]; i++ )
-			{
-				if ( strcmp( detectedResolutions[ i ], currentResolution ) == 0 )
-					break;
-			}
-
-			if ( detectedResolutions[ i ] == NULL )
-			{
-				detectedResolutions[ i++ ] = currentResolution;
-				detectedResolutions[ i ] = NULL;
-			}
-		}
-
 		resolutions = detectedResolutions;
 		resolutionsDetected = qtrue;
 	}
+}
 }
 
 /*

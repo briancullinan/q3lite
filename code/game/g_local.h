@@ -354,6 +354,7 @@ typedef struct {
 	int			voteYes;
 	int			voteNo;
 	int			numVotingClients;		// set by CalculateRanks
+	int			voteClientNum;			// clientNum who called the vote
 
 	// team voting state
 	char		teamVoteString[2][MAX_STRING_CHARS];
@@ -727,6 +728,7 @@ extern	vmCvar_t	g_enableBreath;
 extern	vmCvar_t	g_singlePlayer;
 extern	vmCvar_t	g_proxMineTimeout;
 extern	vmCvar_t	g_localTeamPref;
+extern	vmCvar_t	g_intermissionDuration;
 
 void	trap_Print( const char *text );
 void	trap_Error( const char *text ) __attribute__((noreturn));

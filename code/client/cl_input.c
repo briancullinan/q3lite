@@ -681,16 +681,10 @@ qboolean CL_ReadyToSendPacket( void ) {
 	}
 
 	// send every frame for LAN
-	if ( cl_lanForcePackets->integer && Sys_IsLANAddress( clc.netchan.remoteAddress ) ) {
+	if ( cl_lanForcePackets->integer && clc.netchan.isLANAddress ) {
 		return qtrue;
 	}
 
-	// check for exceeding cl_maxpackets
-	if ( cl_maxpackets->integer < 15 ) {
-		Cvar_Set( "cl_maxpackets", "15" );
-	} else if ( cl_maxpackets->integer > 125 ) {
-		Cvar_Set( "cl_maxpackets", "125" );
-	}
 	oldPacketNum = (clc.netchan.outgoingSequence - 1) & PACKET_MASK;
 	delta = cls.realtime -  cl.outPackets[ oldPacketNum ].p_realtime;
 	if ( delta < 1000 / cl_maxpackets->integer ) {
@@ -724,7 +718,7 @@ During normal gameplay, a client packet will contain something like:
 */
 void CL_WritePacket( void ) {
 	msg_t		buf;
-	byte		data[MAX_MSGLEN];
+	byte		data[ MAX_MSGLEN_BUF ];
 	int			i, j;
 	usercmd_t	*cmd, *oldcmd;
 	usercmd_t	nullcmd;
@@ -740,7 +734,7 @@ void CL_WritePacket( void ) {
 	Com_Memset( &nullcmd, 0, sizeof(nullcmd) );
 	oldcmd = &nullcmd;
 
-	MSG_Init( &buf, data, sizeof(data) );
+	MSG_Init( &buf, data, MAX_MSGLEN );
 
 	MSG_Bitstream( &buf );
 	// write the current serverId so the server

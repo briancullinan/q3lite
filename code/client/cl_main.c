@@ -32,6 +32,7 @@ cvar_t	*cl_voip;
 
 #ifdef USE_RENDERER_DLOPEN
 cvar_t	*cl_renderer;
+cvar_t	*cl_sysvidmode;
 #endif
 
 cvar_t	*cl_nodelta;
@@ -917,7 +918,7 @@ CL_ReadDemoMessage
 void CL_ReadDemoMessage( void ) {
 	int			r;
 	msg_t		buf;
-	byte		bufData[ MAX_MSGLEN ];
+	byte		bufData[ MAX_MSGLEN_BUF ];
 	int			s;
 
 	if ( !clc.demofile ) {
@@ -934,7 +935,7 @@ void CL_ReadDemoMessage( void ) {
 	clc.serverMessageSequence = LittleLong( s );
 
 	// init the message
-	MSG_Init( &buf, bufData, sizeof( bufData ) );
+	MSG_Init( &buf, bufData, MAX_MSGLEN );
 
 	// get the length
 	r = FS_Read (&buf.cursize, 4, clc.demofile);
@@ -1284,6 +1285,7 @@ void CL_MapLoading( void ) {
 		Com_Memset( clc.serverMessage, 0, sizeof( clc.serverMessage ) );
 		Com_Memset( &cl.gameState, 0, sizeof( cl.gameState ) );
 		clc.lastPacketSentTime = -9999;
+		cls.framecount++;
 		SCR_UpdateScreen();
 	} else {
 		// clear nextmap so the cinematic shutdown doesn't execute it
@@ -1292,11 +1294,11 @@ void CL_MapLoading( void ) {
 		Q_strncpyz( clc.servername, "localhost", sizeof(clc.servername) );
 		clc.state = CA_CHALLENGING;		// so the connect screen is drawn
 		Key_SetCatcher( 0 );
+		cls.framecount++;
 		SCR_UpdateScreen();
 		clc.connectTime = -RETRANSMIT_TIMEOUT;
 		NET_StringToAdr( clc.servername, &clc.serverAddress, NA_UNSPEC);
 		// we don't need a challenge on the localhost
-
 		CL_CheckForResend();
 	}
 }
@@ -1451,6 +1453,7 @@ void CL_Disconnect( qboolean showMainMenu ) {
 	// Stop recording any video
 	if( CL_VideoRecording( ) ) {
 		// Finish rendering current frame
+		cls.framecount++;
 		SCR_UpdateScreen( );
 		CL_CloseAVI( );
 	}
@@ -2583,7 +2586,9 @@ void CL_ConnectionlessPacket( netadr_t from, msg_t *msg ) {
 
 	c = Cmd_Argv(0);
 
-	Com_DPrintf ("CL packet %s: %s\n", NET_AdrToStringwPort(from), c);
+	if ( com_developer->integer ) {
+		Com_Printf( "CL packet %s: %s\n", NET_AdrToStringwPort( from ), c );
+	}
 
 	// challenge from the server we are connecting to
 	if (!Q_stricmp(c, "challengeResponse"))
@@ -2809,8 +2814,10 @@ void CL_PacketEvent( netadr_t from, msg_t *msg ) {
 	// packet from server
 	//
 	if ( !NET_CompareAdr( from, clc.netchan.remoteAddress ) ) {
-		Com_DPrintf ("%s:sequenced packet without connection\n"
+		if ( com_developer->integer ) {
+			Com_Printf("%s:sequenced packet without connection\n"
 			, NET_AdrToStringwPort( from ) );
+		}
 		// FIXME: send a client disconnect?
 		return;
 	}
@@ -2926,10 +2933,10 @@ void CL_Frame ( int msec ) {
 			cls.realFrametime = msec;
 			cls.frametime = msec;
 			cls.realtime += cls.frametime;
+			cls.framecount++;
 			SCR_UpdateScreen();
 			S_Update();
 			Con_RunConsole();
-			cls.framecount++;
 			return;
 		}
 	}
@@ -3027,6 +3034,7 @@ void CL_Frame ( int msec ) {
 	CL_SetCGameTime();
 
 	// update the screen
+	cls.framecount++;
 	SCR_UpdateScreen();
 
 	// update audio
@@ -3044,8 +3052,6 @@ void CL_Frame ( int msec ) {
 	SCR_RunCinematic();
 
 	Con_RunConsole();
-
-	cls.framecount++;
 }
 
 
@@ -3070,10 +3076,8 @@ static __attribute__ ((format (printf, 2, 3))) void QDECL CL_RefPrintf( int prin
 		Com_Printf ("%s", msg);
 	} else if ( print_level == PRINT_WARNING ) {
 		Com_Printf (S_COLOR_YELLOW "%s", msg);		// yellow
-	} else if ( print_level == PRINT_ERROR ) {
-		Com_Printf (S_COLOR_RED "%s", msg);			// red
 	} else if ( print_level == PRINT_DEVELOPER ) {
-		Com_DPrintf (S_COLOR_RED "%s", msg);		// red - developer only
+		Com_DPrintf (S_COLOR_RED "%s", msg);		// red
 	}
 }
 
@@ -3191,7 +3195,15 @@ void CL_InitRef( void ) {
 	Com_Printf( "----- Initializing Renderer ----\n" );
 
 #ifdef USE_RENDERER_DLOPEN
-	cl_renderer = Cvar_Get("cl_renderer", "opengl2", CVAR_ARCHIVE | CVAR_LATCH);
+	cl_sysvidmode = Cvar_Get("cl_sysvidmode", "opengles1", CVAR_ARCHIVE | CVAR_LATCH);
+
+	if( Q_stricmp( cl_sysvidmode->string, "opengles1" ) == 0 )
+	{
+		Com_sprintf(dllName, sizeof(dllName), "renderer_%s_" ARCH_STRING DLL_EXT, cl_sysvidmode->string);
+
+		rendererLib = Sys_LoadDll(dllName, qfalse);
+	} else {
+		cl_renderer = Cvar_Get("cl_renderer", "opengl1", CVAR_ARCHIVE | CVAR_LATCH);
 
 	Com_sprintf(dllName, sizeof(dllName), "renderer_%s_" ARCH_STRING DLL_EXT, cl_renderer->string);
 
@@ -3200,14 +3212,17 @@ void CL_InitRef( void ) {
 		Com_Printf("failed:\n\"%s\"\n", Sys_LibraryError());
 		Cvar_ForceReset("cl_renderer");
 
-		Com_sprintf(dllName, sizeof(dllName), "renderer_opengl2_" ARCH_STRING DLL_EXT);
+			Com_sprintf(dllName, sizeof(dllName), "renderer_opengl1_" ARCH_STRING DLL_EXT);
 		rendererLib = Sys_LoadDll(dllName, qfalse);
+	}
 	}
 
 	if(!rendererLib)
 	{
 		Com_Printf("failed:\n\"%s\"\n", Sys_LibraryError());
 		Com_Error(ERR_FATAL, "Failed to load renderer");
+	} else {
+		Com_Printf("Renderer loaded.\n");
 	}
 
 	GetRefAPI = Sys_LoadFunction(rendererLib, "GetRefAPI");
@@ -3523,6 +3538,7 @@ void CL_Init( void ) {
 	cl_anglespeedkey = Cvar_Get ("cl_anglespeedkey", "1.5", 0);
 
 	cl_maxpackets = Cvar_Get ("cl_maxpackets", "30", CVAR_ARCHIVE );
+	Cvar_CheckRange( cl_maxpackets, 15, 125, qtrue );
 	cl_packetdup = Cvar_Get ("cl_packetdup", "1", CVAR_ARCHIVE );
 
 	cl_run = Cvar_Get ("cl_run", "1", CVAR_ARCHIVE);
@@ -3687,6 +3703,17 @@ void CL_Init( void ) {
 	CL_GenerateQKey();
 	Cvar_Get( "cl_guid", "", CVAR_USERINFO | CVAR_ROM );
 	CL_UpdateGUID( NULL, 0 );
+
+	// Display SDL compiled/linked version numbers.
+	SDL_version compiled;
+	SDL_version linked;
+
+	SDL_VERSION( &compiled );
+	SDL_GetVersion( &linked );
+	Com_Printf( "Compiled with SDL v%d.%d.%d\n",
+		compiled.major, compiled.minor, compiled.patch );
+	Com_Printf( "Linking against SDL v%d.%d.%d\n",
+		linked.major, linked.minor, linked.patch );
 
 	Com_Printf( "----- Client Initialization Complete -----\n" );
 }
@@ -3855,7 +3882,10 @@ void CL_ServerInfoPacket( netadr_t from, msg_t *msg ) {
 		{
 			// calc ping time
 			cl_pinglist[i].time = Sys_Milliseconds() - cl_pinglist[i].start;
-			Com_DPrintf( "ping time %dms from %s\n", cl_pinglist[i].time, NET_AdrToString( from ) );
+			if ( com_developer->integer )
+			{
+				Com_Printf( "ping time %dms from %s\n", cl_pinglist[i].time, NET_AdrToString( from ) );
+			}
 
 			// save of info
 			Q_strncpyz( cl_pinglist[i].info, infoString, sizeof( cl_pinglist[i].info ) );

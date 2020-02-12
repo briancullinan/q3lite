@@ -25,7 +25,7 @@ static qboolean IQM_CheckRange( iqmHeader_t *header, int offset,
 }
 // "multiply" 3x4 matrices, these are assumed to be the top 3 rows
 // of a 4x4 matrix with the last row = (0 0 0 1)
-static void Matrix34Multiply( const float *a, const float *b, float *out ) {
+static void Matrix34Multiply( float *a, float *b, float *out ) {
 	out[ 0] = a[0] * b[0] + a[1] * b[4] + a[ 2] * b[ 8];
 	out[ 1] = a[0] * b[1] + a[1] * b[5] + a[ 2] * b[ 9];
 	out[ 2] = a[0] * b[2] + a[1] * b[6] + a[ 2] * b[10];
@@ -39,7 +39,23 @@ static void Matrix34Multiply( const float *a, const float *b, float *out ) {
 	out[10] = a[8] * b[2] + a[9] * b[6] + a[10] * b[10];
 	out[11] = a[8] * b[3] + a[9] * b[7] + a[10] * b[11] + a[11];
 }
-static void JointToMatrix( const quat_t rot, const vec3_t scale, const vec3_t trans,
+static void InterpolateMatrix( float *a, float *b, float lerp, float *mat ) {
+	float unLerp = 1.0f - lerp;
+
+	mat[ 0] = a[ 0] * unLerp + b[ 0] * lerp;
+	mat[ 1] = a[ 1] * unLerp + b[ 1] * lerp;
+	mat[ 2] = a[ 2] * unLerp + b[ 2] * lerp;
+	mat[ 3] = a[ 3] * unLerp + b[ 3] * lerp;
+	mat[ 4] = a[ 4] * unLerp + b[ 4] * lerp;
+	mat[ 5] = a[ 5] * unLerp + b[ 5] * lerp;
+	mat[ 6] = a[ 6] * unLerp + b[ 6] * lerp;
+	mat[ 7] = a[ 7] * unLerp + b[ 7] * lerp;
+	mat[ 8] = a[ 8] * unLerp + b[ 8] * lerp;
+	mat[ 9] = a[ 9] * unLerp + b[ 9] * lerp;
+	mat[10] = a[10] * unLerp + b[10] * lerp;
+	mat[11] = a[11] * unLerp + b[11] * lerp;
+}
+static void JointToMatrix( vec4_t rot, vec3_t scale, vec3_t trans,
 			   float *mat ) {
 	float xx = 2.0f * rot[0] * rot[0];
 	float yy = 2.0f * rot[1] * rot[1];
@@ -64,7 +80,8 @@ static void JointToMatrix( const quat_t rot, const vec3_t scale, const vec3_t tr
 	mat[10] = scale[2] * (1.0f - (xx + yy));
 	mat[11] = trans[2];
 }
-static void Matrix34Invert( const float *inMat, float *outMat ) {
+static void Matrix34Invert( float *inMat, float *outMat )
+{
 	vec3_t trans;
 	float invSqrLen, *v;
 
@@ -83,62 +100,6 @@ static void Matrix34Invert( const float *inMat, float *outMat ) {
 	outMat[ 3] = -DotProduct(outMat + 0, trans);
 	outMat[ 7] = -DotProduct(outMat + 4, trans);
 	outMat[11] = -DotProduct(outMat + 8, trans);
-}
-static void QuatSlerp(const quat_t from, const quat_t _to, float fraction, quat_t out) {
-	float angle, cosAngle, sinAngle, backlerp, lerp;
-	quat_t to;
-
-	// cos() of angle
-	cosAngle = from[0] * _to[0] + from[1] * _to[1] + from[2] * _to[2] + from[3] * _to[3];
-
-	// negative handling is needed for taking shortest path (required for model joints)
-	if ( cosAngle < 0.0f ) {
-		cosAngle = -cosAngle;
-		to[0] = - _to[0];
-		to[1] = - _to[1];
-		to[2] = - _to[2];
-		to[3] = - _to[3];
-	} else {
-		QuatCopy( _to, to );
-	}
-
-	if ( cosAngle < 0.999999f ) {
-		// spherical lerp (slerp)
-		angle = acosf( cosAngle );
-		sinAngle = sinf( angle );
-		backlerp = sinf( ( 1.0f - fraction ) * angle ) / sinAngle;
-		lerp = sinf( fraction * angle ) / sinAngle;
-	} else {
-		// linear lerp
-		backlerp = 1.0f - fraction;
-		lerp = fraction;
-	}
-
-	out[0] = from[0] * backlerp + to[0] * lerp;
-	out[1] = from[1] * backlerp + to[1] * lerp;
-	out[2] = from[2] * backlerp + to[2] * lerp;
-	out[3] = from[3] * backlerp + to[3] * lerp;
-}
-static vec_t QuatNormalize2( const quat_t v, quat_t out) {
-	float	length, ilength;
-
-	length = v[0]*v[0] + v[1]*v[1] + v[2]*v[2] + v[3]*v[3];
-
-	if (length) {
-		/* writing it this way allows gcc to recognize that rsqrt can be used */
-		ilength = 1/(float)sqrt (length);
-		/* sqrt(length) = length * (1 / sqrt(length)) */
-		length *= ilength;
-		out[0] = v[0]*ilength;
-		out[1] = v[1]*ilength;
-		out[2] = v[2]*ilength;
-		out[3] = v[3]*ilength;
-	} else {
-		out[0] = out[1] = out[2] = 0;
-		out[3] = -1;
-	}
-
-	return length;
 }
 
 /*
@@ -159,7 +120,7 @@ qboolean R_LoadIQM( model_t *mod, void *buffer, int filesize, const char *mod_na
 	unsigned short		*framedata;
 	char			*str;
 	int			i, j, k;
-	iqmTransform_t		*transform;
+	float			jointInvMats[IQM_MAX_JOINTS * 12] = {0.0f};
 	float			*mat, *matInv;
 	size_t			size, joint_names;
 	byte			*dataPtr;
@@ -579,11 +540,10 @@ qboolean R_LoadIQM( model_t *mod, void *buffer, int filesize, const char *mod_na
 	if( header->num_joints ) {
 		size += joint_names;								// joint names
 		size += header->num_joints * sizeof(int);			// joint parents
-		size += header->num_joints * 12 * sizeof(float);	// bind joint matricies
-		size += header->num_joints * 12 * sizeof(float);	// inverse bind joint matricies
+		size += header->num_joints * 12 * sizeof( float );	// joint mats
 	}
 	if( header->num_poses ) {
-		size += header->num_poses * header->num_frames * sizeof(iqmTransform_t); // pose transforms
+		size += header->num_poses * header->num_frames * 12 * sizeof( float ); // pose mats
 	}
 	if( header->ofs_bounds ) {
 		size += header->num_frames * 6 * sizeof(float);		// model bounds
@@ -654,15 +614,12 @@ qboolean R_LoadIQM( model_t *mod, void *buffer, int filesize, const char *mod_na
 		iqmData->jointParents = (int*)dataPtr;
 		dataPtr += header->num_joints * sizeof(int);		// joint parents
 
-		iqmData->bindJoints = (float*)dataPtr;
-		dataPtr += header->num_joints * 12 * sizeof(float);		// bind joint matricies
-
-		iqmData->invBindJoints = (float*)dataPtr;
-		dataPtr += header->num_joints * 12 * sizeof(float);		// inverse bind joint matricies
+		iqmData->jointMats = (float*)dataPtr;
+		dataPtr += header->num_joints * 12 * sizeof( float ); // joint mats
 	}
 	if( header->num_poses ) {
-		iqmData->poses = (iqmTransform_t*)dataPtr;
-		dataPtr += header->num_poses * header->num_frames * sizeof(iqmTransform_t); // pose transforms
+		iqmData->poseMats = (float*)dataPtr;
+		dataPtr += header->num_poses * header->num_frames * 12 * sizeof( float ); // pose mats
 	}
 	if( header->ofs_bounds ) {
 		iqmData->bounds = (float*)dataPtr;
@@ -828,23 +785,22 @@ qboolean R_LoadIQM( model_t *mod, void *buffer, int filesize, const char *mod_na
 			iqmData->jointParents[i] = joint->parent;
 		}
 
-		// calculate bind joint matrices and their inverses
-		mat = iqmData->bindJoints;
-		matInv = iqmData->invBindJoints;
+		// calculate joint matrices and their inverses
+		// joint inverses are needed only until the pose matrices are calculated
+		mat = iqmData->jointMats;
+		matInv = jointInvMats;
 		joint = (iqmJoint_t *)((byte *)header + header->ofs_joints);
 		for( i = 0; i < header->num_joints; i++, joint++ ) {
 			float baseFrame[12], invBaseFrame[12];
-
-			QuatNormalize2( joint->rotate, joint->rotate );
 
 			JointToMatrix( joint->rotate, joint->scale, joint->translate, baseFrame );
 			Matrix34Invert( baseFrame, invBaseFrame );
 
 			if ( joint->parent >= 0 )
 			{
-				Matrix34Multiply( iqmData->bindJoints + 12 * joint->parent, baseFrame, mat );
+				Matrix34Multiply( iqmData->jointMats + 12 * joint->parent, baseFrame, mat );
 				mat += 12;
-				Matrix34Multiply( invBaseFrame, iqmData->invBindJoints + 12 * joint->parent, matInv );
+				Matrix34Multiply( invBaseFrame, jointInvMats + 12 * joint->parent, matInv );
 				matInv += 12;
 			}
 			else
@@ -859,15 +815,16 @@ qboolean R_LoadIQM( model_t *mod, void *buffer, int filesize, const char *mod_na
 
 	if( header->num_poses )
 	{
-		// calculate pose transforms
-		transform = iqmData->poses;
+		// calculate pose matrices
 		framedata = (unsigned short *)((byte *)header + header->ofs_frames);
+		mat = iqmData->poseMats;
 		for( i = 0; i < header->num_frames; i++ ) {
 			pose = (iqmPose_t *)((byte *)header + header->ofs_poses);
-			for( j = 0; j < header->num_poses; j++, pose++, transform++ ) {
+			for( j = 0; j < header->num_poses; j++, pose++ ) {
 				vec3_t	translate;
-				quat_t	rotate;
+				vec4_t	rotate;
 				vec3_t	scale;
+				float	mat1[12], mat2[12];
 
 				translate[0] = pose->channeloffset[0];
 				if( pose->mask & 0x001)
@@ -902,9 +859,18 @@ qboolean R_LoadIQM( model_t *mod, void *buffer, int filesize, const char *mod_na
 				if( pose->mask & 0x200)
 					scale[2] += *framedata++ * pose->channelscale[9];
 
-				VectorCopy( translate, transform->translate );
-				QuatNormalize2( rotate, transform->rotate );
-				VectorCopy( scale, transform->scale );
+				// construct transformation matrix
+				JointToMatrix( rotate, scale, translate, mat1 );
+
+				if( pose->parent >= 0 ) {
+					Matrix34Multiply( iqmData->jointMats + 12 * pose->parent,
+							  mat1, mat2 );
+				} else {
+					Com_Memcpy( mat2, mat1, sizeof(mat1) );
+				}
+
+				Matrix34Multiply( mat2, jointInvMats + 12 * j, mat );
+				mat += 12;
 			}
 		}
 	}
@@ -1143,59 +1109,37 @@ void R_AddIQMSurfaces( trRefEntity_t *ent ) {
 
 
 static void ComputePoseMats( iqmData_t *data, int frame, int oldframe,
-			      float backlerp, float *poseMats ) {
-	iqmTransform_t relativeJoints[IQM_MAX_JOINTS];
-	iqmTransform_t *relativeJoint;
-	const iqmTransform_t *pose;
-	const iqmTransform_t *oldpose;
-	const int *jointParent;
-	const float *invBindMat;
-	float *poseMat, lerp;
+			      float backlerp, float *mat ) {
+	float	*mat1, *mat2;
+	int	*joint = data->jointParents;
 	int i;
 
-	relativeJoint = relativeJoints;
-
-	// copy or lerp animation frame pose
 	if ( oldframe == frame ) {
-		pose = &data->poses[frame * data->num_poses];
-		for ( i = 0; i < data->num_poses; i++, pose++, relativeJoint++ ) {
-			VectorCopy( pose->translate, relativeJoint->translate );
-			QuatCopy( pose->rotate, relativeJoint->rotate );
-			VectorCopy( pose->scale, relativeJoint->scale );
-		}
+		mat1 = data->poseMats + 12 * data->num_poses * frame;
+		for( i = 0; i < data->num_poses; i++, joint++ ) {
+			if( *joint >= 0 ) {
+				Matrix34Multiply( mat + 12 * *joint,
+						  mat1 + 12*i, mat + 12*i );
 	} else {
-		lerp = 1.0f - backlerp;
-		pose = &data->poses[frame * data->num_poses];
-		oldpose = &data->poses[oldframe * data->num_poses];
-		for ( i = 0; i < data->num_poses; i++, oldpose++, pose++, relativeJoint++ ) {
-			relativeJoint->translate[0] = oldpose->translate[0] * backlerp + pose->translate[0] * lerp;
-			relativeJoint->translate[1] = oldpose->translate[1] * backlerp + pose->translate[1] * lerp;
-			relativeJoint->translate[2] = oldpose->translate[2] * backlerp + pose->translate[2] * lerp;
-
-			relativeJoint->scale[0] = oldpose->scale[0] * backlerp + pose->scale[0] * lerp;
-			relativeJoint->scale[1] = oldpose->scale[1] * backlerp + pose->scale[1] * lerp;
-			relativeJoint->scale[2] = oldpose->scale[2] * backlerp + pose->scale[2] * lerp;
-
-			QuatSlerp( oldpose->rotate, pose->rotate, lerp, relativeJoint->rotate );
+				Com_Memcpy( mat + 12*i, mat1 + 12*i, 12 * sizeof(float) );
 		}
 	}
+	} else  {
+		mat1 = data->poseMats + 12 * data->num_poses * frame;
+		mat2 = data->poseMats + 12 * data->num_poses * oldframe;
 
-	// multiply by inverse of bind pose and parent 'pose mat' (bind pose transform matrix)
-	relativeJoint = relativeJoints;
-	jointParent = data->jointParents;
-	invBindMat = data->invBindJoints;
-	poseMat = poseMats;
-	for ( i = 0; i < data->num_poses; i++, relativeJoint++, jointParent++, invBindMat += 12, poseMat += 12 ) {
-		float mat1[12], mat2[12];
+		for( i = 0; i < data->num_poses; i++, joint++ ) {
+			if( *joint >= 0 ) {
+				float tmpMat[12];
+				InterpolateMatrix( mat1 + 12*i, mat2 + 12*i,
+						   backlerp, tmpMat );
+				Matrix34Multiply( mat + 12 * *joint,
+						  tmpMat, mat + 12*i );
 
-		JointToMatrix( relativeJoint->rotate, relativeJoint->scale, relativeJoint->translate, mat1 );
-
-		if ( *jointParent >= 0 ) {
-			Matrix34Multiply( &data->bindJoints[(*jointParent)*12], mat1, mat2 );
-			Matrix34Multiply( mat2, invBindMat, mat1 );
-			Matrix34Multiply( &poseMats[(*jointParent)*12], mat1, poseMat );
 		} else {
-			Matrix34Multiply( mat1, invBindMat, poseMat );
+				InterpolateMatrix( mat1 + 12*i, mat2 + 12*i,
+						   backlerp, mat + 12*i );
+			}
 		}
 	}
 }
@@ -1206,7 +1150,7 @@ static void ComputeJointMats( iqmData_t *data, int frame, int oldframe,
 	int	i;
 
 	if ( data->num_poses == 0 ) {
-		Com_Memcpy( mat, data->bindJoints, data->num_joints * 12 * sizeof(float) );
+		Com_Memcpy( mat, data->jointMats, data->num_joints * 12 * sizeof(float) );
 		return;
 	}
 
@@ -1218,7 +1162,7 @@ static void ComputeJointMats( iqmData_t *data, int frame, int oldframe,
 
 		Com_Memcpy(outmat, mat1, sizeof(outmat));
 
-		Matrix34Multiply( outmat, data->bindJoints + 12*i, mat1 );
+		Matrix34Multiply( outmat, data->jointMats + 12*i, mat1 );
 	}
 }
 
@@ -1283,20 +1227,19 @@ void RB_IQMSurfaceAnim( surfaceType_t *surface ) {
 			float *nrmMat = &influenceNrmMat[9*i];
 			int	j;
 			float	blendWeights[4];
+			int		numWeights;
 
-			if ( data->blendWeightsType == IQM_FLOAT ) {
-				blendWeights[0] = data->influenceBlendWeights.f[4*influence + 0];
-				blendWeights[1] = data->influenceBlendWeights.f[4*influence + 1];
-				blendWeights[2] = data->influenceBlendWeights.f[4*influence + 2];
-				blendWeights[3] = data->influenceBlendWeights.f[4*influence + 3];
-			} else {
-				blendWeights[0] = (float)data->influenceBlendWeights.b[4*influence + 0] / 255.0f;
-				blendWeights[1] = (float)data->influenceBlendWeights.b[4*influence + 1] / 255.0f;
-				blendWeights[2] = (float)data->influenceBlendWeights.b[4*influence + 2] / 255.0f;
-				blendWeights[3] = (float)data->influenceBlendWeights.b[4*influence + 3] / 255.0f;
+			for ( numWeights = 0; numWeights < 4; numWeights++ ) {
+				if ( data->blendWeightsType == IQM_FLOAT )
+					blendWeights[numWeights] = data->influenceBlendWeights.f[4*influence + numWeights];
+				else
+					blendWeights[numWeights] = (float)data->influenceBlendWeights.b[4*influence + numWeights] / 255.0f;
+
+				if ( blendWeights[numWeights] <= 0.0f )
+					break;
 			}
 
-			if ( blendWeights[0] <= 0.0f ) {
+			if ( numWeights == 0 ) {
 				// no blend joint, use identity matrix.
 				vtxMat[0] = identityMatrix[0];
 				vtxMat[1] = identityMatrix[1];
@@ -1326,11 +1269,7 @@ void RB_IQMSurfaceAnim( surfaceType_t *surface ) {
 				vtxMat[10] = blendWeights[0] * poseMats[12 * data->influenceBlendIndexes[4*influence + 0] + 10];
 				vtxMat[11] = blendWeights[0] * poseMats[12 * data->influenceBlendIndexes[4*influence + 0] + 11];
 
-				for( j = 1; j < 3; j++ ) {
-					if ( blendWeights[j] <= 0.0f ) {
-						break;
-					}
-
+				for( j = 1; j < numWeights; j++ ) {
 					vtxMat[0] += blendWeights[j] * poseMats[12 * data->influenceBlendIndexes[4*influence + j] + 0];
 					vtxMat[1] += blendWeights[j] * poseMats[12 * data->influenceBlendIndexes[4*influence + j] + 1];
 					vtxMat[2] += blendWeights[j] * poseMats[12 * data->influenceBlendIndexes[4*influence + j] + 2];

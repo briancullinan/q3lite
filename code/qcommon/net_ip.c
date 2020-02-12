@@ -1600,13 +1600,13 @@ Called from NET_Sleep which uses select() to determine which sockets have seen a
 
 void NET_Event(fd_set *fdr)
 {
-	byte bufData[MAX_MSGLEN + 1];
-	netadr_t from = {0};
+	byte bufData[ MAX_MSGLEN_BUF ];
+	netadr_t from;
 	msg_t netmsg;
 	
 	while(1)
 	{
-		MSG_Init(&netmsg, bufData, sizeof(bufData));
+		MSG_Init( &netmsg, bufData, MAX_MSGLEN );
 
 		if(NET_GetPacket(&from, &netmsg, fdr))
 		{
