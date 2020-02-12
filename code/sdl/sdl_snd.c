@@ -29,7 +29,7 @@ static int dmasize = 0;
 
 static SDL_AudioDeviceID sdlPlaybackDevice;
 
-#if defined USE_VOIP && SDL_VERSION_ATLEAST( 2, 0, 5 )
+#if defined USE_VOIP && SDL_VERSION_ATLEAST( 2, 0, 9 )
 #define USE_SDL_AUDIO_CAPTURE
 
 static SDL_AudioDeviceID sdlCaptureDevice;
@@ -424,4 +424,3 @@ void SNDDMA_MasterGain( float val )
 #endif
 }
 #endif
-

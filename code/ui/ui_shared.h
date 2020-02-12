@@ -185,7 +185,6 @@ typedef struct multiDef_s {
 	float cvarValue[MAX_MULTI_CVARS];
 	int count;
 	qboolean strDef;
-	qboolean videoMode;
 } multiDef_t;
 
 typedef struct modelDef_s {

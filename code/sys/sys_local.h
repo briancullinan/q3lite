@@ -15,8 +15,8 @@
 // Require a minimum version of SDL
 #define MINSDL_MAJOR 2
 #define MINSDL_MINOR 0
-#if SDL_VERSION_ATLEAST( 2, 0, 5 )
-#define MINSDL_PATCH 5
+#if SDL_VERSION_ATLEAST( 2, 0, 9 )
+#define MINSDL_PATCH 9
 #else
 #define MINSDL_PATCH 0
 #endif
@@ -42,6 +42,7 @@ void Sys_PlatformInit( void );
 void Sys_PlatformExit( void );
 void Sys_SigHandler( int signal ) __attribute__ ((noreturn));
 void Sys_ErrorDialog( const char *error );
+void Sys_CrashLog( const char *error );
 void Sys_AnsiColorPrint( const char *msg );
 
 int Sys_PID( void );

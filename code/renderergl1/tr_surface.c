@@ -536,7 +536,7 @@ static void RB_SurfaceLightningBolt( void ) {
 * The inputs to this routing seem to always be close to length = 1.0 (about 0.6 to 2.0)
 * This means that we don't have to worry about zero length or enormously long vectors.
 */
-void VectorArrayNormalize(vec4_t *normals, unsigned int count)
+static void VectorArrayNormalize(vec4_t *normals, unsigned int count)
 {
 //    assert(count);
         
@@ -589,7 +589,7 @@ void VectorArrayNormalize(vec4_t *normals, unsigned int count)
 
 
 /*
-** LerpMeshVertexes
+** LerpMeshVertexes_scalar
 */
 static void LerpMeshVertexes_scalar(md3Surface_t *surf, float backlerp)
 {
@@ -691,13 +691,6 @@ static void LerpMeshVertexes_scalar(md3Surface_t *surf, float backlerp)
 
 static void LerpMeshVertexes(md3Surface_t *surf, float backlerp)
 {
-#if idppc_altivec
-	if (com_altivec->integer) {
-		// must be in a separate translation unit or G3 systems will crash.
-		LerpMeshVertexes_altivec( surf, backlerp );
-		return;
-	}
-#endif // idppc_altivec
 	LerpMeshVertexes_scalar( surf, backlerp );
 }
 

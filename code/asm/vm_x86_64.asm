@@ -1,4 +1,4 @@
-; 
+;
 
 ; Call wrapper for vm_x86 when built with MSVC in 64 bit mode,
 ; since MSVC does not support inline x64 assembler code anymore.

@@ -79,6 +79,8 @@ void Netchan_Setup(netsrc_t sock, netchan_t *chan, netadr_t adr, int qport, int 
 #ifdef LEGACY_PROTOCOL
 	chan->compat = compat;
 #endif
+
+	chan->isLANAddress = Sys_IsLANAddress( adr );
 }
 
 /*
@@ -556,7 +558,6 @@ void QDECL NET_OutOfBandPrint( netsrc_t sock, netadr_t adr, const char *format, 
 	va_list		argptr;
 	char		string[MAX_MSGLEN];
 
-
 	// set the header
 	string[0] = -1;
 	string[1] = -1;
@@ -571,9 +572,10 @@ void QDECL NET_OutOfBandPrint( netsrc_t sock, netadr_t adr, const char *format, 
 	NET_SendPacket( sock, strlen( string ), string, adr );
 }
 
+
 /*
 ===============
-NET_OutOfBandPrint
+NET_OutOfBandData
 
 Sends a data message in an out-of-band datagram (only used for "connect")
 ================
@@ -616,7 +618,7 @@ int NET_StringToAdr( const char *s, netadr_t *a, netadrtype_t family )
 	if (!strcmp (s, "localhost")) {
 		Com_Memset (a, 0, sizeof(*a));
 		a->type = NA_LOOPBACK;
-// as NA_LOOPBACK doesn't require ports report port was given.
+		// as NA_LOOPBACK doesn't require ports report port was given.
 		return 1;
 	}
 

@@ -181,6 +181,9 @@ typedef struct client_s {
 #ifdef LEGACY_PROTOCOL
 	qboolean		compat;
 #endif
+	int				inactivityTime;
+	qboolean		inactivityWarning;
+	qboolean		justConnected;
 } client_t;
 
 //=============================================================================
@@ -213,6 +216,7 @@ typedef struct {
 	qboolean	initialized;				// sv_init has completed
 
 	int			time;						// will be strictly increasing across level changes
+	int			msgTime;					// will be used as precise sent time
 
 	int			snapFlagServerBit;			// ^= SNAPFLAG_SERVERCOUNT every SV_SpawnServer()
 
@@ -253,12 +257,12 @@ extern	cvar_t	*sv_rconPassword;
 extern	cvar_t	*sv_privatePassword;
 extern	cvar_t	*sv_allowDownload;
 extern	cvar_t	*sv_maxclients;
+extern	cvar_t	*sv_maxconcurrent;
 
 extern	cvar_t	*sv_privateClients;
 extern	cvar_t	*sv_hostname;
 extern	cvar_t	*sv_master[MAX_MASTER_SERVERS];
 extern	cvar_t	*sv_reconnectlimit;
-extern	cvar_t	*sv_showloss;
 extern	cvar_t	*sv_padPackets;
 extern	cvar_t	*sv_killserver;
 extern	cvar_t	*sv_mapname;
@@ -308,6 +312,8 @@ struct leakyBucket_s {
 
 	leakyBucket_t *prev, *next;
 };
+
+extern cvar_t *sv_inactivity;
 
 extern leakyBucket_t outboundLeakyBucket;
 
@@ -362,6 +368,8 @@ void SV_DropClient( client_t *drop, const char *reason );
 
 void SV_ExecuteClientCommand( client_t *cl, const char *s, qboolean clientOK );
 void SV_ClientThink (client_t *cl, usercmd_t *cmd);
+
+void SV_MoveClientToSpec( int clientNum, const char *reason );
 
 int SV_WriteDownloadToClient(client_t *cl , msg_t *msg);
 int SV_SendDownloadMessages(void);

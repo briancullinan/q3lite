@@ -142,7 +142,7 @@ instead of using the single glDrawElements call that may be inefficient
 without compiled vertex arrays.
 ==================
 */
-void R_DrawElements( int numIndexes, const glIndex_t *indexes ) {
+static void R_DrawElements( int numIndexes, const glIndex_t *indexes ) {
 	int		primitives;
 
 	primitives = r_primitives->integer;
@@ -381,7 +381,7 @@ static void DrawMultitextured( shaderCommands_t *input, int stage ) {
 
 /*
 ===================
-ProjectDlightTexture
+ProjectDlightTexture_scalar
 
 Perform dynamic lighting with another rendering pass
 ===================
@@ -539,13 +539,6 @@ static void ProjectDlightTexture_scalar( void ) {
 }
 
 static void ProjectDlightTexture( void ) {
-#if idppc_altivec
-	if (com_altivec->integer) {
-		// must be in a separate translation unit or G3 systems will crash.
-		ProjectDlightTexture_altivec();
-		return;
-	}
-#endif
 	ProjectDlightTexture_scalar();
 }
 
