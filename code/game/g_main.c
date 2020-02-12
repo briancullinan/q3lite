@@ -64,6 +64,7 @@ vmCvar_t	pmove_msec;
 vmCvar_t	g_rankings;
 vmCvar_t	g_listEntity;
 vmCvar_t	g_localTeamPref;
+vmCvar_t	g_intermissionDuration;
 #ifdef MISSIONPACK
 vmCvar_t	g_obeliskHealth;
 vmCvar_t	g_obeliskRegenPeriod;
@@ -160,7 +161,8 @@ static cvarTable_t		gameCvarTable[] = {
 	{ &pmove_msec, "pmove_msec", "8", CVAR_SYSTEMINFO, 0, qfalse},
 
 	{ &g_rankings, "g_rankings", "0", 0, 0, qfalse},
-	{ &g_localTeamPref, "g_localTeamPref", "", 0, 0, qfalse }
+	{ &g_localTeamPref, "g_localTeamPref", "", 0, 0, qfalse },
+	{ &g_intermissionDuration, "g_intermissionDuration", "0", CVAR_ARCHIVE, 0, qtrue  }
 
 };
 
@@ -1257,6 +1259,17 @@ void CheckIntermissionExit( void ) {
 
 	// only test ready status when there are real players present
 	if ( playerCount > 0 ) {
+		// end intermission if duration timelimit is reached
+		if (  g_intermissionDuration.integer > 0 ) {
+			if ( g_intermissionDuration.integer > 30 ) {
+				trap_Cvar_Set( "g_intermissionDuration", "30" );
+			}
+			if ( level.time > level.intermissiontime + ( g_intermissionDuration.integer * 1000 )) {
+				ExitLevel();
+				return;
+			}
+		}
+
 		// if nobody wants to go, clear timer
 		if ( !ready ) {
 			level.readyToExit = qfalse;
@@ -1421,6 +1434,25 @@ void CheckExitRules( void ) {
 	}
 }
 
+/*
+=================
+ForceVoteFail
+
+Used to force a callvote to fail
+=================
+*/
+void ForceVoteFail( void ) {
+	level.voteTime = 0;
+	level.voteExecuteTime = 0;
+	level.voteString[0] = 0;
+	level.voteDisplayString[0] = 0;
+	level.voteClientNum = -1;
+	trap_SetConfigstring( CS_VOTE_TIME, "" );
+	trap_SetConfigstring( CS_VOTE_STRING, "" );
+	trap_SetConfigstring( CS_VOTE_YES, "" );
+	trap_SetConfigstring( CS_VOTE_NO, "" );
+}
+
 
 
 /*
@@ -1568,6 +1600,15 @@ void CheckVote( void ) {
 	if ( !level.voteTime ) {
 		return;
 	}
+	// check if vote caller is still in the game and fail the vote if not
+	if ( level.voteClientNum >= 0 && level.voteClientNum < MAX_CLIENTS ) {
+		if ( level.clients[ level.voteClientNum ].pers.connected != CON_CONNECTED ||
+			level.clients[ level.voteClientNum ].sess.sessionTeam == TEAM_SPECTATOR ) {
+				ForceVoteFail();
+				trap_SendServerCommand( -1, "print \"Vote failed.\n\"" );
+				return;
+		}
+	}
 	if ( level.time - level.voteTime >= VOTE_TIME ) {
 		trap_SendServerCommand( -1, "print \"Vote failed.\n\"" );
 	} else {
@@ -1584,6 +1625,7 @@ void CheckVote( void ) {
 			return;
 		}
 	}
+	level.voteClientNum = -1;
 	level.voteTime = 0;
 	trap_SetConfigstring( CS_VOTE_TIME, "" );
 
@@ -1686,6 +1728,15 @@ void CheckTeamVote( int team ) {
 	if ( !level.teamVoteTime[cs_offset] ) {
 		return;
 	}
+	// check if vote caller is still in the game and fail the vote if not
+	if ( level.voteClientNum >= 0 && level.voteClientNum < MAX_CLIENTS ) {
+		if ( level.clients[ level.voteClientNum ].pers.connected != CON_CONNECTED ||
+			level.clients[ level.voteClientNum ].sess.sessionTeam == TEAM_SPECTATOR ) {
+				ForceVoteFail();
+				trap_SendServerCommand( -1, "print \"Vote failed.\n\"" );
+				return;
+		}
+	}
 	if ( level.time - level.teamVoteTime[cs_offset] >= VOTE_TIME ) {
 		trap_SendServerCommand( -1, "print \"Team vote failed.\n\"" );
 	} else {
@@ -1708,6 +1759,7 @@ void CheckTeamVote( int team ) {
 			return;
 		}
 	}
+	level.voteClientNum = -1;
 	level.teamVoteTime[cs_offset] = 0;
 	trap_SetConfigstring( CS_TEAMVOTE_TIME + cs_offset, "" );
 

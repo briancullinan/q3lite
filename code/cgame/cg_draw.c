@@ -776,6 +776,31 @@ static float CG_DrawTimer( float y ) {
 	return y + BIGCHAR_HEIGHT + 4;
 }
 
+/*
+==================
+CG_DrawSpeedometer
+==================
+*/
+
+static float CG_DrawSpeedometer( float y ) {
+	char	*s;
+	float	speed;
+	vec3_t	velocity;
+	int	w;
+
+	if (!cg_drawSpeedometer.integer || !cg.snap) {
+		return y;
+	}
+
+	VectorCopy(cg.predictedPlayerState.velocity, velocity);
+	speed = sqrt(velocity[0] * velocity[0] + velocity[1] * velocity[1]);
+	s = va( "%iups", ((int)speed));
+	w = CG_DrawStrlen( s ) * BIGCHAR_WIDTH;
+	CG_DrawBigString( 635 - w, y + 2, s, 1.0F);
+
+	return y + BIGCHAR_HEIGHT + 4;
+
+}
 
 /*
 =================
@@ -974,6 +999,9 @@ static void CG_DrawUpperRight(stereoFrame_t stereoFrame)
 	}
 	if ( cg_drawTimer.integer ) {
 		y = CG_DrawTimer( y );
+	}
+	if ( cg_drawSpeedometer.integer ) {
+		y = CG_DrawSpeedometer( y );
 	}
 	if ( cg_drawAttacker.integer ) {
 		CG_DrawAttacker( y );
@@ -2089,7 +2117,9 @@ static void CG_DrawVote(void) {
 	// play a talk beep whenever it is modified
 	if ( cgs.voteModified ) {
 		cgs.voteModified = qfalse;
-		trap_S_StartLocalSound( cgs.media.talkSound, CHAN_LOCAL_SOUND );
+		if ( cg_novotebeeps.integer != 1 && cg_novotebeeps.integer != 3 ) {
+			trap_S_StartLocalSound( cgs.media.talkSound, CHAN_LOCAL_SOUND );
+		}
 	}
 
 	sec = ( VOTE_TIME - ( cg.time - cgs.voteTime ) ) / 1000;
@@ -2130,7 +2160,9 @@ static void CG_DrawTeamVote(void) {
 	// play a talk beep whenever it is modified
 	if ( cgs.teamVoteModified[cs_offset] ) {
 		cgs.teamVoteModified[cs_offset] = qfalse;
-		trap_S_StartLocalSound( cgs.media.talkSound, CHAN_LOCAL_SOUND );
+		if ( cg_novotebeeps.integer != 2 && cg_novotebeeps.integer != 3 ) {
+			trap_S_StartLocalSound( cgs.media.talkSound, CHAN_LOCAL_SOUND );
+		}
 	}
 
 	sec = ( VOTE_TIME - ( cg.time - cgs.teamVoteTime[cs_offset] ) ) / 1000;

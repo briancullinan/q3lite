@@ -556,15 +556,15 @@ SV_SendMessageToClient
 Called by SV_SendClientSnapshot and SV_SendClientGameState
 =======================
 */
-void SV_SendMessageToClient(msg_t *msg, client_t *client)
+void SV_SendMessageToClient( msg_t *msg, client_t *client )
 {
 	// record information about the message
 	client->frames[client->netchan.outgoingSequence & PACKET_MASK].messageSize = msg->cursize;
-	client->frames[client->netchan.outgoingSequence & PACKET_MASK].messageSent = svs.time;
-	client->frames[client->netchan.outgoingSequence & PACKET_MASK].messageAcked = -1;
+	client->frames[client->netchan.outgoingSequence & PACKET_MASK].messageSent = svs.msgTime;
+	client->frames[client->netchan.outgoingSequence & PACKET_MASK].messageAcked = 0;
 
 	// send the datagram
-	SV_Netchan_Transmit(client, msg);
+	SV_Netchan_Transmit( client, msg );
 }
 
 
@@ -577,7 +577,7 @@ Also called by SV_FinalMessage
 =======================
 */
 void SV_SendClientSnapshot( client_t *client ) {
-	byte		msg_buf[MAX_MSGLEN];
+	byte		msg_buf[ MAX_MSGLEN_BUF ];
 	msg_t		msg;
 
 	// build the snapshot
@@ -589,7 +589,7 @@ void SV_SendClientSnapshot( client_t *client ) {
 		return;
 	}
 
-	MSG_Init (&msg, msg_buf, sizeof(msg_buf));
+	MSG_Init( &msg, msg_buf, MAX_MSGLEN );
 	msg.allowoverflow = qtrue;
 
 	// NOTE, MRE: all server->client messages now acknowledge
@@ -609,8 +609,8 @@ void SV_SendClientSnapshot( client_t *client ) {
 
 	// check for overflow
 	if ( msg.overflowed ) {
-		Com_Printf ("WARNING: msg overflowed for %s\n", client->name);
-		MSG_Clear (&msg);
+		Com_Printf( "WARNING: msg overflowed for %s\n", client->name );
+		MSG_Clear( &msg );
 	}
 
 	SV_SendMessageToClient( &msg, client );
@@ -624,8 +624,11 @@ SV_SendClientMessages
 */
 void SV_SendClientMessages(void)
 {
-	int		i;
+	int			i;
 	client_t	*c;
+	qboolean	lanRate;
+
+	svs.msgTime = Sys_Milliseconds();
 
 	// send a message to each connected client
 	for(i=0; i < sv_maxclients->integer; i++)
@@ -647,16 +650,14 @@ void SV_SendClientMessages(void)
 			continue;		// Drop this snapshot if the packet queue is still full or delta compression will break
 		}
 
-		if(!(c->netchan.remoteAddress.type == NA_LOOPBACK ||
-		     (sv_lanForceRate->integer && Sys_IsLANAddress(c->netchan.remoteAddress))))
+		lanRate = c->netchan.remoteAddress.type == NA_LOOPBACK || (sv_lanForceRate->integer && c->netchan.isLANAddress);
+
+		// rate control for clients not on LAN 
+		if( !lanRate && SV_RateMsec( c ) > 0 )
 		{
-			// rate control for clients not on LAN 
-			if(SV_RateMsec(c) > 0)
-			{
-				// Not enough time since last packet passed through the line
-				c->rateDelayed = qtrue;
-				continue;
-			}
+			// Not enough time since last packet passed through the line
+			c->rateDelayed = qtrue;
+			continue;
 		}
 
 		// generate and send a new message

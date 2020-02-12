@@ -1,4 +1,4 @@
-; 
+;
 
 ; MASM ftol conversion functions using SSE or FPU
 ; assume __cdecl calling convention is being used for x86, __fastcall for x64

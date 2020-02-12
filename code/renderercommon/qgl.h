@@ -10,8 +10,16 @@
 
 #ifdef USE_LOCAL_HEADERS
 #	include "SDL_opengl.h"
+#	include "SDL_opengles.h"
+#	include "SDL_egl.h"
 #else
 #	include <SDL_opengl.h>
+#	include <SDL_opengles.h>
+#	include <SDL_egl.h>
+#endif
+
+#ifndef APIENTRYP
+#define APIENTRYP APIENTRY *
 #endif
 
 extern void (APIENTRYP qglActiveTextureARB) (GLenum texture);
@@ -21,6 +29,7 @@ extern void (APIENTRYP qglMultiTexCoord2fARB) (GLenum target, GLfloat s, GLfloat
 extern void (APIENTRYP qglLockArraysEXT) (GLint first, GLsizei count);
 extern void (APIENTRYP qglUnlockArraysEXT) (void);
 
+extern void myglMultiTexCoord2f( GLenum texture, GLfloat s, GLfloat t );
 
 //===========================================================================
 
@@ -51,6 +60,7 @@ extern void (APIENTRYP qglUnlockArraysEXT) (void);
 	GLE(GLenum, GetError, void) \
 	GLE(void, GetIntegerv, GLenum pname, GLint *params) \
 	GLE(const GLubyte *, GetString, GLenum name) \
+	GLE(GLboolean, IsEnabled, GLenum cap) \
 	GLE(void, LineWidth, GLfloat width) \
 	GLE(void, PolygonOffset, GLfloat factor, GLfloat units) \
 	GLE(void, ReadPixels, GLint x, GLint y, GLsizei width, GLsizei height, GLenum format, GLenum type, GLvoid *pixels) \
@@ -82,14 +92,14 @@ extern void (APIENTRYP qglUnlockArraysEXT) (void);
 	GLE(void, TexEnvf, GLenum target, GLenum pname, GLfloat param) \
 	GLE(void, VertexPointer, GLint size, GLenum type, GLsizei stride, const GLvoid *ptr) \
 
-// OpenGL 1.0/1.1 and 3.2 core profile but not OpenGL ES 1.x
+ // OpenGL 1.0/1.1 and 3.2 core profile but not OpenGL ES 1.x
 #define QGL_DESKTOP_1_1_PROCS \
 	GLE(void, ClearDepth, GLclampd depth) \
 	GLE(void, DepthRange, GLclampd near_val, GLclampd far_val) \
 	GLE(void, DrawBuffer, GLenum mode) \
 	GLE(void, PolygonMode, GLenum face, GLenum mode) \
 
-// OpenGL 1.0/1.1 but not OpenGL 3.2 core profile or OpenGL ES 1.x
+ // OpenGL 1.0/1.1 but not OpenGL 3.2 core profile or OpenGL ES 1.x
 #define QGL_DESKTOP_1_1_FIXED_FUNCTION_PROCS \
 	GLE(void, ArrayElement, GLint i) \
 	GLE(void, Begin, GLenum mode) \
