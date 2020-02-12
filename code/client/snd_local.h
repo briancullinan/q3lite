@@ -1,23 +1,5 @@
 /*
-===========================================================================
-Copyright (C) 1999-2005 Id Software, Inc.
 
-This file is part of Quake III Arena source code.
-
-Quake III Arena source code is free software; you can redistribute it
-and/or modify it under the terms of the GNU General Public License as
-published by the Free Software Foundation; either version 2 of the License,
-or (at your option) any later version.
-
-Quake III Arena source code is distributed in the hope that it will be
-useful, but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License
-along with Quake III Arena source code; if not, write to the Free Software
-Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
-===========================================================================
 */
 // snd_local.h -- private sound definations
 
@@ -65,8 +47,10 @@ typedef struct sfx_s {
 typedef struct {
 	int			channels;
 	int			samples;				// mono samples in buffer
+	int			fullsamples;			// samples with all channels in buffer (samples divided by channels)
 	int			submission_chunk;		// don't mix less than this #
 	int			samplebits;
+	int			isfloat;
 	int			speed;
 	byte		*buffer;
 } dma_t;
@@ -175,6 +159,15 @@ void	SNDDMA_BeginPainting (void);
 
 void	SNDDMA_Submit(void);
 
+#ifdef USE_VOIP
+void SNDDMA_StartCapture(void);
+int SNDDMA_AvailableCaptureSamples(void);
+void SNDDMA_Capture(int samples, byte *data);
+void SNDDMA_StopCapture(void);
+void SNDDMA_MasterGain(float val);
+#endif
+
+
 //====================================================================
 
 #define	MAX_CHANNELS			96
@@ -254,3 +247,7 @@ typedef enum
 typedef int srcHandle_t;
 
 qboolean S_AL_Init( soundInterface_t *si );
+
+#ifdef idppc_altivec
+void S_PaintChannelFrom16_altivec( portable_samplepair_t paintbuffer[PAINTBUFFER_SIZE], int snd_vol, channel_t *ch, const sfx_t *sc, int count, int sampleOffset, int bufferOffset );
+#endif

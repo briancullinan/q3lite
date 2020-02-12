@@ -1,23 +1,5 @@
 /*
-===========================================================================
-Copyright (C) 1999-2005 Id Software, Inc.
 
-This file is part of Quake III Arena source code.
-
-Quake III Arena source code is free software; you can redistribute it
-and/or modify it under the terms of the GNU General Public License as
-published by the Free Software Foundation; either version 2 of the License,
-or (at your option) any later version.
-
-Quake III Arena source code is distributed in the hope that it will be
-useful, but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License
-along with Quake III Arena source code; if not, write to the Free Software
-Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
-===========================================================================
 */
 //
 
@@ -1366,12 +1348,24 @@ void CheckExitRules( void ) {
 		return;
 	}
 
+	if ( g_timelimit.integer < 0 || g_timelimit.integer > INT_MAX / 60000 ) {
+		G_Printf( "timelimit %i is out of range, defaulting to 0\n", g_timelimit.integer );
+		trap_Cvar_Set( "timelimit", "0" );
+		trap_Cvar_Update( &g_timelimit );
+	}
+
 	if ( g_timelimit.integer && !level.warmupTime ) {
 		if ( level.time - level.startTime >= g_timelimit.integer*60000 ) {
 			trap_SendServerCommand( -1, "print \"Timelimit hit.\n\"");
 			LogExit( "Timelimit hit." );
 			return;
 		}
+	}
+
+	if ( g_fraglimit.integer < 0 ) {
+		G_Printf( "fraglimit %i is out of range, defaulting to 0\n", g_fraglimit.integer );
+		trap_Cvar_Set( "fraglimit", "0" );
+		trap_Cvar_Update( &g_fraglimit );
 	}
 
 	if ( g_gametype.integer < GT_CTF && g_fraglimit.integer ) {
@@ -1403,6 +1397,12 @@ void CheckExitRules( void ) {
 				return;
 			}
 		}
+	}
+
+	if ( g_capturelimit.integer < 0 ) {
+		G_Printf( "capturelimit %i is out of range, defaulting to 0\n", g_capturelimit.integer );
+		trap_Cvar_Set( "capturelimit", "0" );
+		trap_Cvar_Update( &g_capturelimit );
 	}
 
 	if ( g_gametype.integer >= GT_CTF && g_capturelimit.integer ) {

@@ -1,23 +1,5 @@
 /*
-===========================================================================
-Copyright (C) 1999-2005 Id Software, Inc.
 
-This file is part of Quake III Arena source code.
-
-Quake III Arena source code is free software; you can redistribute it
-and/or modify it under the terms of the GNU General Public License as
-published by the Free Software Foundation; either version 2 of the License,
-or (at your option) any later version.
-
-Quake III Arena source code is distributed in the hope that it will be
-useful, but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License
-along with Quake III Arena source code; if not, write to the Free Software
-Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
-===========================================================================
 */
 #include "tr_local.h"
 
@@ -1115,6 +1097,7 @@ static qboolean ParseStage( shaderStage_t *stage, char **text )
 					stage->specularScale[1] = (stage->specularScale[0] < 0.5f) ? 0.0f : 1.0f;
 					stage->specularScale[0] = smoothness;
 				}
+				else
 				{
 					// two values, rgb then gloss
 					stage->specularScale[3] = stage->specularScale[1];
@@ -1133,7 +1116,7 @@ static qboolean ParseStage( shaderStage_t *stage, char **text )
 				continue;
 			}
 
-			stage->specularScale[2] = atof( token );
+			stage->specularScale[3] = atof( token );
 
 		}
 		//
@@ -2232,7 +2215,7 @@ static void CollapseStagesToLightall(shaderStage_t *diffuse,
 		defs |= LIGHTDEF_USE_LIGHT_VERTEX;
 	}
 
-	if (r_deluxeMapping->integer && tr.worldDeluxeMapping && lightmap)
+	if (r_deluxeMapping->integer && tr.worldDeluxeMapping && lightmap && shader.lightmapIndex >= 0)
 	{
 		//ri.Printf(PRINT_ALL, ", deluxemap");
 		diffuse->bundle[TB_DELUXEMAP] = lightmap->bundle[0];
@@ -2421,6 +2404,8 @@ static int CollapseStagesToGLSL(void)
 
 	if (!skip)
 	{
+		qboolean usedLightmap = qfalse;
+
 		for (i = 0; i < MAX_SHADER_STAGES; i++)
 		{
 			shaderStage_t *pStage = &stages[i];
@@ -2479,7 +2464,16 @@ static int CollapseStagesToGLSL(void)
 					case ST_COLORMAP:
 						if (pStage2->bundle[0].tcGen == TCGEN_LIGHTMAP)
 						{
-							lightmap = pStage2;
+							int blendBits = pStage->stateBits & ( GLS_DSTBLEND_BITS | GLS_SRCBLEND_BITS );
+
+							// Only add lightmap to blendfunc filter stage if it's the first time lightmap is used
+							// otherwise it will cause the shader to be darkened by the lightmap multiple times.
+							if (!usedLightmap || (blendBits != (GLS_DSTBLEND_SRC_COLOR | GLS_SRCBLEND_ZERO)
+								&& blendBits != (GLS_DSTBLEND_ZERO | GLS_SRCBLEND_DST_COLOR)))
+							{
+								lightmap = pStage2;
+								usedLightmap = qtrue;
+							}
 						}
 						break;
 

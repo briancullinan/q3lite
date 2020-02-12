@@ -1,23 +1,5 @@
 /*
-===========================================================================
-Copyright (C) 1999-2005 Id Software, Inc.
 
-This file is part of Quake III Arena source code.
-
-Quake III Arena source code is free software; you can redistribute it
-and/or modify it under the terms of the GNU General Public License as
-published by the Free Software Foundation; either version 2 of the License,
-or (at your option) any later version.
-
-Quake III Arena source code is distributed in the hope that it will be
-useful, but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License
-along with Quake III Arena source code; if not, write to the Free Software
-Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
-===========================================================================
 */
 // common.c -- misc functions used in client and server
 
@@ -794,19 +776,19 @@ typedef struct {
 } memzone_t;
 
 // main zone for all "dynamic" memory allocation
-memzone_t	*mainzone;
+static memzone_t	*mainzone;
 // we also have a small zone for small allocations that would only
 // fragment the main zone (think of cvar and cmd strings)
-memzone_t	*smallzone;
+static memzone_t	*smallzone;
 
-void Z_CheckHeap( void );
+static void Z_CheckHeap( void );
 
 /*
 ========================
 Z_ClearZone
 ========================
 */
-void Z_ClearZone( memzone_t *zone, int size ) {
+static void Z_ClearZone( memzone_t *zone, int size ) {
 	memblock_t	*block;
 	
 	// set the entire zone to one free block
@@ -831,7 +813,7 @@ void Z_ClearZone( memzone_t *zone, int size ) {
 Z_AvailableZoneMemory
 ========================
 */
-int Z_AvailableZoneMemory( memzone_t *zone ) {
+static int Z_AvailableZoneMemory( memzone_t *zone ) {
 	return zone->size - zone->used;
 }
 
@@ -1076,7 +1058,7 @@ void *S_Malloc( int size ) {
 Z_CheckHeap
 ========================
 */
-void Z_CheckHeap( void ) {
+static void Z_CheckHeap( void ) {
 	memblock_t	*block;
 	
 	for (block = mainzone->blocklist.next ; ; block = block->next) {

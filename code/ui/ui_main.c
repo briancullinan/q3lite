@@ -1,23 +1,5 @@
 /*
-===========================================================================
-Copyright (C) 1999-2005 Id Software, Inc.
 
-This file is part of Quake III Arena source code.
-
-Quake III Arena source code is free software; you can redistribute it
-and/or modify it under the terms of the GNU General Public License as
-published by the Free Software Foundation; either version 2 of the License,
-or (at your option) any later version.
-
-Quake III Arena source code is distributed in the hope that it will be
-useful, but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License
-along with Quake III Arena source code; if not, write to the Free Software
-Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
-===========================================================================
 */
 //
 /*
@@ -1751,16 +1733,10 @@ static int UI_OwnerDrawWidth(int ownerDraw, float scale) {
 static void UI_DrawBotName(rectDef_t *rect, float scale, vec4_t color, int textStyle) {
 	int value = uiInfo.botIndex;
 	int game = trap_Cvar_VariableValue("g_gametype");
-	const char *text = "";
+	const char *text;
 	if (game >= GT_TEAM) {
-		if (value >= uiInfo.characterCount) {
-			value = 0;
-		}
 		text = uiInfo.characterList[value].name;
 	} else {
-		if (value >= UI_GetNumBots()) {
-			value = 0;
-		}
 		text = UI_GetBotNameByNumber(value);
 	}
   Text_Paint(rect->x, rect->y, scale, color, text, 0, 0, textStyle);
@@ -2548,16 +2524,16 @@ static qboolean UI_BotName_HandleKey(int flags, float *special, int key) {
 		value += select;
 
 		if (game >= GT_TEAM) {
-			if (value >= uiInfo.characterCount + 2) {
+			if (value >= uiInfo.characterCount) {
 				value = 0;
 			} else if (value < 0) {
-				value = uiInfo.characterCount + 2 - 1;
+				value = uiInfo.characterCount - 1;
 			}
 		} else {
-			if (value >= UI_GetNumBots() + 2) {
+			if (value >= UI_GetNumBots()) {
 				value = 0;
 			} else if (value < 0) {
-				value = UI_GetNumBots() + 2 - 1;
+				value = UI_GetNumBots() - 1;
 			}
 		}
 		uiInfo.botIndex = value;
@@ -3057,7 +3033,7 @@ static void UI_Update(const char *name) {
 		switch (val) {
 			case 0:
 				trap_Cvar_SetValue( "r_depthbits", 0 );
-				trap_Cvar_SetValue( "r_stencilbits", 0 );
+				trap_Cvar_Reset( "r_stencilbits" );
 			break;
 			case 16:
 				trap_Cvar_SetValue( "r_depthbits", 16 );
@@ -3065,6 +3041,7 @@ static void UI_Update(const char *name) {
 			break;
 			case 32:
 				trap_Cvar_SetValue( "r_depthbits", 24 );
+				trap_Cvar_SetValue( "r_stencilbits", 8 );
 			break;
 		}
 	} else if (Q_stricmp(name, "r_lodbias") == 0) {
@@ -3088,8 +3065,10 @@ static void UI_Update(const char *name) {
 				trap_Cvar_SetValue( "r_lodbias", 0 );
 				trap_Cvar_SetValue( "r_colorbits", 32 );
 				trap_Cvar_SetValue( "r_depthbits", 24 );
+				trap_Cvar_SetValue( "r_stencilbits", 8 );
 				trap_Cvar_SetValue( "r_picmip", 0 );
 				trap_Cvar_SetValue( "r_mode", 4 );
+				trap_Cvar_Set( "ui_videomode", "800x600" );
 				trap_Cvar_SetValue( "r_texturebits", 32 );
 				trap_Cvar_SetValue( "r_fastSky", 0 );
 				trap_Cvar_SetValue( "r_inGameVideo", 1 );
@@ -3103,9 +3082,11 @@ static void UI_Update(const char *name) {
 				trap_Cvar_SetValue( "r_vertexlight", 0 );
 				trap_Cvar_SetValue( "r_lodbias", 0 );
 				trap_Cvar_SetValue( "r_colorbits", 0 );
-				trap_Cvar_SetValue( "r_depthbits", 24 );
+				trap_Cvar_SetValue( "r_depthbits", 0 );
+				trap_Cvar_Reset( "r_stencilbits" );
 				trap_Cvar_SetValue( "r_picmip", 1 );
 				trap_Cvar_SetValue( "r_mode", 3 );
+				trap_Cvar_Set( "ui_videomode", "640x480" );
 				trap_Cvar_SetValue( "r_texturebits", 0 );
 				trap_Cvar_SetValue( "r_fastSky", 0 );
 				trap_Cvar_SetValue( "r_inGameVideo", 1 );
@@ -3120,8 +3101,10 @@ static void UI_Update(const char *name) {
 				trap_Cvar_SetValue( "r_lodbias", 1 );
 				trap_Cvar_SetValue( "r_colorbits", 0 );
 				trap_Cvar_SetValue( "r_depthbits", 0 );
+				trap_Cvar_Reset( "r_stencilbits" );
 				trap_Cvar_SetValue( "r_picmip", 1 );
 				trap_Cvar_SetValue( "r_mode", 3 );
+				trap_Cvar_Set( "ui_videomode", "640x480" );
 				trap_Cvar_SetValue( "r_texturebits", 0 );
 				trap_Cvar_SetValue( "cg_shadows", 0 );
 				trap_Cvar_SetValue( "r_fastSky", 1 );
@@ -3136,7 +3119,9 @@ static void UI_Update(const char *name) {
 				trap_Cvar_SetValue( "r_lodbias", 2 );
 				trap_Cvar_SetValue( "r_colorbits", 16 );
 				trap_Cvar_SetValue( "r_depthbits", 16 );
+				trap_Cvar_SetValue( "r_stencilbits", 0 );
 				trap_Cvar_SetValue( "r_mode", 3 );
+				trap_Cvar_Set( "ui_videomode", "640x480" );
 				trap_Cvar_SetValue( "r_picmip", 2 );
 				trap_Cvar_SetValue( "r_texturebits", 16 );
 				trap_Cvar_SetValue( "cg_shadows", 0 );
@@ -3263,6 +3248,7 @@ static void UI_RunMenuScript(char **args) {
 				trap_Cvar_Set("ui_cdkeyvalid", "CD Key does not appear to be valid.");
 			}
 		} else if (Q_stricmp(name, "loadArenas") == 0) {
+			UI_LoadArenasIntoMapList();
 			UI_MapCountByGameType(qfalse);
 			Menu_SetFeederSelection(NULL, FEEDER_ALLMAPS, 0, "createserver");
 		} else if (Q_stricmp(name, "saveControls") == 0) {
@@ -5079,6 +5065,8 @@ void _UI_Init( qboolean inGameLoad ) {
 	// cache redundant calulations
 	trap_GetGlconfig( &uiInfo.uiDC.glconfig );
 
+	trap_Cvar_Set("ui_videomode", va( "%dx%d", uiInfo.uiDC.glconfig.vidWidth, uiInfo.uiDC.glconfig.vidHeight ) );
+
 	// for 640x480 virtualized screen
 	uiInfo.uiDC.yscale = uiInfo.uiDC.glconfig.vidHeight * (1.0/480.0);
 	uiInfo.uiDC.xscale = uiInfo.uiDC.glconfig.vidWidth * (1.0/640.0);
@@ -5871,6 +5859,7 @@ static cvarTable_t		cvarTable[] = {
 	{ &ui_realCaptureLimit, "capturelimit", "8", CVAR_SERVERINFO | CVAR_ARCHIVE | CVAR_NORESTART},
 	{ &ui_serverStatusTimeOut, "ui_serverStatusTimeOut", "7000", CVAR_ARCHIVE},
 
+	{ NULL, "ui_videomode", "", CVAR_ROM },
 	{ NULL, "g_localTeamPref", "", 0 },
 };
 

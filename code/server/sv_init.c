@@ -1,23 +1,5 @@
 /*
-===========================================================================
-Copyright (C) 1999-2005 Id Software, Inc.
 
-This file is part of Quake III Arena source code.
-
-Quake III Arena source code is free software; you can redistribute it
-and/or modify it under the terms of the GNU General Public License as
-published by the Free Software Foundation; either version 2 of the License,
-or (at your option) any later version.
-
-Quake III Arena source code is distributed in the hope that it will be
-useful, but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License
-along with Quake III Arena source code; if not, write to the Free Software
-Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
-===========================================================================
 */
 
 #include "server.h"
@@ -374,16 +356,12 @@ static void SV_ClearServer(void) {
 
 /*
 ================
-SV_TouchCGame
-
-  touch the cgame.vm so that a pure client can load it if it's in a separate pk3
+SV_TouchFile
 ================
 */
-static void SV_TouchCGame(void) {
+static void SV_TouchFile( const char *filename ) {
 	fileHandle_t	f;
-	char filename[MAX_QPATH];
 
-	Com_sprintf( filename, sizeof(filename), "vm/%s.qvm", "cgame" );
 	FS_FOpenFileRead( filename, &f, qfalse );
 	if ( f ) {
 		FS_FCloseFile( f );
@@ -574,11 +552,11 @@ void SV_SpawnServer( char *server, qboolean killBots ) {
 		p = FS_LoadedPakNames();
 		Cvar_Set( "sv_pakNames", p );
 
-		// if a dedicated pure server we need to touch the cgame because it could be in a
-		// separate pk3 file and the client will need to load the latest cgame.qvm
-		if ( com_dedicated->integer ) {
-			SV_TouchCGame();
-		}
+		// we need to touch the cgame and ui qvm because they could be in
+		// separate pk3 files and the client will need to download the pk3
+		// files with the latest cgame and ui qvm to pass the pure check
+		SV_TouchFile( "vm/cgame.qvm" );
+		SV_TouchFile( "vm/ui.qvm" );
 	}
 	else {
 		Cvar_Set( "sv_paks", "" );

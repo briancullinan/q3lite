@@ -1,27 +1,31 @@
 /*
-===========================================================================
-Copyright (C) 1999-2005 Id Software, Inc.
 
-This file is part of Quake III Arena source code.
-
-Quake III Arena source code is free software; you can redistribute it
-and/or modify it under the terms of the GNU General Public License as
-published by the Free Software Foundation; either version 2 of the License,
-or (at your option) any later version.
-
-Quake III Arena source code is distributed in the hope that it will be
-useful, but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License
-along with Quake III Arena source code; if not, write to the Free Software
-Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
-===========================================================================
 */
 //
 // q_shared.c -- stateless support routines that are included in each code dll
 #include "q_shared.h"
+
+// ^[0-9a-zA-Z]
+qboolean Q_IsColorString(const char *p) {
+	if (!p)
+		return qfalse;
+
+	if (p[0] != Q_COLOR_ESCAPE)
+		return qfalse;
+
+	if (p[1] == 0)
+		return qfalse;
+
+	// isalnum expects a signed integer in the range -1 (EOF) to 255, or it might assert on undefined behaviour
+	// a dereferenced char pointer has the range -128 to 127, so we just need to rangecheck the negative part
+	if (p[1] < 0)
+		return qfalse;
+
+	if (isalnum(p[1]) == 0)
+		return qfalse;
+
+	return qtrue;
+}
 
 float Com_Clamp( float min, float max, float value ) {
 	if ( value < min ) {
@@ -660,15 +664,15 @@ Com_HexStrToInt
 */
 int Com_HexStrToInt( const char *str )
 {
-	if ( !str || !str[ 0 ] )
+	if ( !str )
 		return -1;
 
 	// check for hex code
-	if( str[ 0 ] == '0' && str[ 1 ] == 'x' )
+	if( str[ 0 ] == '0' && str[ 1 ] == 'x' && str[ 2 ] != '\0' )
 	{
-		int i, n = 0;
+		int i, n = 0, len = strlen( str );
 
-		for( i = 2; i < strlen( str ); i++ )
+		for( i = 2; i < len; i++ )
 		{
 			char digit;
 
@@ -746,13 +750,14 @@ qboolean Q_isintegral( float f )
 	return (int)f == f;
 }
 
-#ifdef _MSC_VER
+#ifdef _WIN32
 /*
 =============
 Q_vsnprintf
- 
+
 Special wrapper function for Microsoft's broken _vsnprintf() function.
-MinGW comes with its own snprintf() which is not broken.
+MinGW comes with its own vsnprintf() which is not broken. mingw-w64
+however, uses Microsoft's broken _vsnprintf() function.
 =============
 */
 

@@ -1,23 +1,5 @@
 /*
-===========================================================================
-Copyright (C) 1999-2005 Id Software, Inc.
 
-This file is part of Quake III Arena source code.
-
-Quake III Arena source code is free software; you can redistribute it
-and/or modify it under the terms of the GNU General Public License as
-published by the Free Software Foundation; either version 2 of the License,
-or (at your option) any later version.
-
-Quake III Arena source code is distributed in the hope that it will be
-useful, but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License
-along with Quake III Arena source code; if not, write to the Free Software
-Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
-===========================================================================
 */
 #include "q_shared.h"
 #include "qcommon.h"
@@ -239,7 +221,7 @@ int MSG_ReadBits( msg_t *msg, int bits ) {
 			for(i=0;i<bits;i+=8) {
 				Huff_offsetReceive (msgHuff.decompressor.tree, &get, msg->data, &msg->bit, msg->cursize<<3);
 //				fwrite(&get, 1, 1, fp);
-				value |= (get<<(i+nbits));
+				value = (unsigned int)value | ((unsigned int)get<<(i+nbits));
 
 				if (msg->bit > msg->cursize<<3) {
 					msg->readcount = msg->cursize + 1;
@@ -462,12 +444,14 @@ char *MSG_ReadString( msg_t *msg ) {
 		if ( c > 127 ) {
 			c = '.';
 		}
-
-		string[l] = c;
-		l++;
-	} while (l < sizeof(string)-1);
+		// break only after reading all expected data from bitstream
+		if ( l >= sizeof(string)-1 ) {
+			break;
+		}
+		string[l++] = c;
+	} while (1);
 	
-	string[l] = 0;
+	string[l] = '\0';
 	
 	return string;
 }
@@ -490,12 +474,14 @@ char *MSG_ReadBigString( msg_t *msg ) {
 		if ( c > 127 ) {
 			c = '.';
 		}
-
-		string[l] = c;
-		l++;
-	} while (l < sizeof(string)-1);
+		// break only after reading all expected data from bitstream
+		if ( l >= sizeof(string)-1 ) {
+			break;
+		}
+		string[l++] = c;
+	} while (1);
 	
-	string[l] = 0;
+	string[l] = '\0';
 	
 	return string;
 }
@@ -518,12 +504,14 @@ char *MSG_ReadStringLine( msg_t *msg ) {
 		if ( c > 127 ) {
 			c = '.';
 		}
-
-		string[l] = c;
-		l++;
-	} while (l < sizeof(string)-1);
+		// break only after reading all expected data from bitstream
+		if ( l >= sizeof(string)-1 ) {
+			break;
+		}
+		string[l++] = c;
+	} while (1);
 	
-	string[l] = 0;
+	string[l] = '\0';
 	
 	return string;
 }
@@ -556,54 +544,9 @@ int MSG_HashKey(const char *string, int maxlen) {
 	return hash;
 }
 
-/*
-=============================================================================
-
-delta functions
-  
-=============================================================================
-*/
-
 extern cvar_t *cl_shownet;
 
 #define	LOG(x) if( cl_shownet && cl_shownet->integer == 4 ) { Com_Printf("%s ", x ); };
-
-void MSG_WriteDelta( msg_t *msg, int oldV, int newV, int bits ) {
-	if ( oldV == newV ) {
-		MSG_WriteBits( msg, 0, 1 );
-		return;
-	}
-	MSG_WriteBits( msg, 1, 1 );
-	MSG_WriteBits( msg, newV, bits );
-}
-
-int	MSG_ReadDelta( msg_t *msg, int oldV, int bits ) {
-	if ( MSG_ReadBits( msg, 1 ) ) {
-		return MSG_ReadBits( msg, bits );
-	}
-	return oldV;
-}
-
-void MSG_WriteDeltaFloat( msg_t *msg, float oldV, float newV ) {
-	floatint_t fi;
-	if ( oldV == newV ) {
-		MSG_WriteBits( msg, 0, 1 );
-		return;
-	}
-	fi.f = newV;
-	MSG_WriteBits( msg, 1, 1 );
-	MSG_WriteBits( msg, fi.i, 32 );
-}
-
-float MSG_ReadDeltaFloat( msg_t *msg, float oldV ) {
-	if ( MSG_ReadBits( msg, 1 ) ) {
-		floatint_t fi;
-
-		fi.i = MSG_ReadBits( msg, 32 );
-		return fi.f;
-	}
-	return oldV;
-}
 
 /*
 =============================================================================

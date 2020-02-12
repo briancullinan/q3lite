@@ -1,23 +1,5 @@
 /*
-===========================================================================
-Copyright (C) 1999-2005 Id Software, Inc.
 
-This file is part of Quake III Arena source code.
-
-Quake III Arena source code is free software; you can redistribute it
-and/or modify it under the terms of the GNU General Public License as
-published by the Free Software Foundation; either version 2 of the License,
-or (at your option) any later version.
-
-Quake III Arena source code is distributed in the hope that it will be
-useful, but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License
-along with Quake III Arena source code; if not, write to the Free Software
-Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
-===========================================================================
 */
 //
 
@@ -5346,7 +5328,33 @@ void BotSetEntityNumForGoal(bot_goal_t *goal, char *classname) {
 		if ( !ent->inuse ) {
 			continue;
 		}
-		if ( !Q_stricmp(ent->classname, classname) ) {
+		if ( Q_stricmp(ent->classname, classname) != 0 ) {
+			continue;
+		}
+		VectorSubtract(goal->origin, ent->s.origin, dir);
+		if (VectorLengthSquared(dir) < Square(10)) {
+			goal->entitynum = i;
+			return;
+		}
+	}
+}
+
+/*
+==================
+BotSetEntityNumForGoalWithActivator
+==================
+*/
+void BotSetEntityNumForGoalWithActivator(bot_goal_t *goal, char *classname) {
+	gentity_t *ent;
+	int i;
+	vec3_t dir;
+
+	ent = &g_entities[0];
+	for (i = 0; i < level.num_entities; i++, ent++) {
+		if ( !ent->inuse || !ent->activator ) {
+			continue;
+		}
+		if ( Q_stricmp(ent->activator->classname, classname) != 0 ) {
 			continue;
 		}
 		VectorSubtract(goal->origin, ent->s.origin, dir);
@@ -5427,21 +5435,21 @@ void BotSetupDeathmatchAI(void) {
 	else if (gametype == GT_OBELISK) {
 		if (trap_BotGetLevelItemGoal(-1, "Red Obelisk", &redobelisk) < 0)
 			BotAI_Print(PRT_WARNING, "Overload without Red Obelisk\n");
-		BotSetEntityNumForGoal(&redobelisk, "team_redobelisk");
+		BotSetEntityNumForGoalWithActivator(&redobelisk, "team_redobelisk");
 		if (trap_BotGetLevelItemGoal(-1, "Blue Obelisk", &blueobelisk) < 0)
 			BotAI_Print(PRT_WARNING, "Overload without Blue Obelisk\n");
-		BotSetEntityNumForGoal(&blueobelisk, "team_blueobelisk");
+		BotSetEntityNumForGoalWithActivator(&blueobelisk, "team_blueobelisk");
 	}
 	else if (gametype == GT_HARVESTER) {
 		if (trap_BotGetLevelItemGoal(-1, "Red Obelisk", &redobelisk) < 0)
 			BotAI_Print(PRT_WARNING, "Harvester without Red Obelisk\n");
-		BotSetEntityNumForGoal(&redobelisk, "team_redobelisk");
+		BotSetEntityNumForGoalWithActivator(&redobelisk, "team_redobelisk");
 		if (trap_BotGetLevelItemGoal(-1, "Blue Obelisk", &blueobelisk) < 0)
 			BotAI_Print(PRT_WARNING, "Harvester without Blue Obelisk\n");
-		BotSetEntityNumForGoal(&blueobelisk, "team_blueobelisk");
+		BotSetEntityNumForGoalWithActivator(&blueobelisk, "team_blueobelisk");
 		if (trap_BotGetLevelItemGoal(-1, "Neutral Obelisk", &neutralobelisk) < 0)
 			BotAI_Print(PRT_WARNING, "Harvester without Neutral Obelisk\n");
-		BotSetEntityNumForGoal(&neutralobelisk, "team_neutralobelisk");
+		BotSetEntityNumForGoalWithActivator(&neutralobelisk, "team_neutralobelisk");
 	}
 #endif
 

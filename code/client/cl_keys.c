@@ -1,23 +1,5 @@
 /*
-===========================================================================
-Copyright (C) 1999-2005 Id Software, Inc.
 
-This file is part of Quake III Arena source code.
-
-Quake III Arena source code is free software; you can redistribute it
-and/or modify it under the terms of the GNU General Public License as
-published by the Free Software Foundation; either version 2 of the License,
-or (at your option) any later version.
-
-Quake III Arena source code is distributed in the hope that it will be
-useful, but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License
-along with Quake III Arena source code; if not, write to the Free Software
-Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
-===========================================================================
 */
 #include "client.h"
 
@@ -825,6 +807,7 @@ to be configured even if they don't have defined names.
 */
 int Key_StringToKeynum( char *str ) {
 	keyname_t	*kn;
+	int			n;
 	
 	if ( !str || !str[0] ) {
 		return -1;
@@ -834,12 +817,9 @@ int Key_StringToKeynum( char *str ) {
 	}
 
 	// check for hex code
-	if ( strlen( str ) == 4 ) {
-		int n = Com_HexStrToInt( str );
-
-		if ( n >= 0 ) {
-			return n;
-		}
+	n = Com_HexStrToInt( str );
+	if ( n >= 0 && n < MAX_KEYS ) {
+		return n;
 	}
 
 	// scan for a text match
@@ -1478,9 +1458,10 @@ void CL_LoadConsoleHistory( void )
 		return;
 	}
 
-	if( consoleSaveBufferSize <= MAX_CONSOLE_SAVE_BUFFER &&
+	if( consoleSaveBufferSize < MAX_CONSOLE_SAVE_BUFFER &&
 			FS_Read( consoleSaveBuffer, consoleSaveBufferSize, f ) == consoleSaveBufferSize )
 	{
+		consoleSaveBuffer[consoleSaveBufferSize] = '\0';
 		text_p = consoleSaveBuffer;
 
 		for( i = COMMAND_HISTORY - 1; i >= 0; i-- )
