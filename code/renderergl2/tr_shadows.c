@@ -1,30 +1,5 @@
 /*
-===========================================================================
-Copyright (C) 1999-2010 id Software LLC, a ZeniMax Media company.
 
-This file is part of Q3lite Source Code.
-
-Q3lite Source Code is free software; you can redistribute it
-and/or modify it under the terms of the GNU General Public License as
-published by the Free Software Foundation; either version 3 of the License,
-or (at your option) any later version.
-
-Q3lite Source Code is distributed in the hope that it will be
-useful, but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License
-along with Q3lite Source Code.  If not, see <http://www.gnu.org/licenses/>.
-
-In addition, Q3lite Source Code is also subject to certain additional terms.
-You should have received a copy of these additional terms immediately following
-the terms and conditions of the GNU General Public License.  If not, please
-request a copy in writing from id Software at the address below.
-If you have questions concerning this license or the applicable additional
-terms, you may contact in writing id Software LLC, c/o ZeniMax Media Inc.,
-Suite 120, Rockville, Maryland 20850 USA.
-===========================================================================
 */
 #include "tr_local.h"
 
@@ -50,8 +25,8 @@ typedef struct {
 
 static	edgeDef_t	edgeDefs[SHADER_MAX_VERTEXES][MAX_EDGE_DEFS];
 static	int			numEdgeDefs[SHADER_MAX_VERTEXES];
-static	int			facing[SHADER_MAX_INDEXES/3];
-static	vec3_t		shadowXyz[SHADER_MAX_VERTEXES];
+//static	int			facing[SHADER_MAX_INDEXES/3];
+//static	vec3_t		shadowXyz[SHADER_MAX_VERTEXES];
 
 void R_AddEdgeDef( int i1, int i2, int facing ) {
 	int		c;
@@ -67,6 +42,8 @@ void R_AddEdgeDef( int i1, int i2, int facing ) {
 }
 
 void R_RenderShadowEdges( void ) {
+	// FIXME: implement this
+#if 0
 	int		i;
 
 #if 0
@@ -145,6 +122,7 @@ void R_RenderShadowEdges( void ) {
 		}
 	}
 #endif
+#endif
 }
 
 /*
@@ -160,6 +138,8 @@ triangleFromEdge[ v1 ][ v2 ]
 =================
 */
 void RB_ShadowTessEnd( void ) {
+	// FIXME: implement this
+#if 0
 	int		i;
 	int		numTris;
 	vec3_t	lightDir;
@@ -237,6 +217,7 @@ void RB_ShadowTessEnd( void ) {
 
 	// reenable writing to the color buffer
 	qglColorMask(rgba[0], rgba[1], rgba[2], rgba[3]);
+#endif
 }
 
 
@@ -251,6 +232,8 @@ overlap and double darken.
 =================
 */
 void RB_ShadowFinish( void ) {
+	// FIXME: implement this
+#if 0
 	if ( r_shadows->integer != 2 ) {
 		return;
 	}
@@ -260,7 +243,6 @@ void RB_ShadowFinish( void ) {
 	qglEnable( GL_STENCIL_TEST );
 	qglStencilFunc( GL_NOTEQUAL, 0, 255 );
 
-	qglDisable (GL_CLIP_PLANE0);
 	GL_Cull( CT_TWO_SIDED );
 
 	GL_BindToTMU( tr.whiteImage, TB_COLORMAP );
@@ -282,6 +264,7 @@ void RB_ShadowFinish( void ) {
 
 	qglColor4f(1,1,1,1);
 	qglDisable( GL_STENCIL_TEST );
+#endif
 }
 
 

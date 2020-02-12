@@ -1,30 +1,5 @@
 /*
-===========================================================================
-Copyright (C) 1999-2010 id Software LLC, a ZeniMax Media company.
 
-This file is part of Q3lite Source Code.
-
-Q3lite Source Code is free software; you can redistribute it
-and/or modify it under the terms of the GNU General Public License as
-published by the Free Software Foundation; either version 3 of the License,
-or (at your option) any later version.
-
-Q3lite Source Code is distributed in the hope that it will be
-useful, but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License
-along with Q3lite Source Code.  If not, see <http://www.gnu.org/licenses/>.
-
-In addition, Q3lite Source Code is also subject to certain additional terms.
-You should have received a copy of these additional terms immediately following
-the terms and conditions of the GNU General Public License.  If not, please
-request a copy in writing from id Software at the address below.
-If you have questions concerning this license or the applicable additional
-terms, you may contact in writing id Software LLC, c/o ZeniMax Media Inc.,
-Suite 120, Rockville, Maryland 20850 USA.
-===========================================================================
 */
 //
 // cg_ents.c -- present snapshot entities, happens every single frame
@@ -672,6 +647,44 @@ static void CG_Portal( centity_t *cent ) {
 
 
 /*
+================
+CG_CreateRotationMatrix
+================
+*/
+void CG_CreateRotationMatrix(vec3_t angles, vec3_t matrix[3]) {
+	AngleVectors(angles, matrix[0], matrix[1], matrix[2]);
+	VectorInverse(matrix[1]);
+}
+
+/*
+================
+CG_TransposeMatrix
+================
+*/
+void CG_TransposeMatrix(vec3_t matrix[3], vec3_t transpose[3]) {
+	int i, j;
+	for (i = 0; i < 3; i++) {
+		for (j = 0; j < 3; j++) {
+			transpose[i][j] = matrix[j][i];
+		}
+	}
+}
+
+/*
+================
+CG_RotatePoint
+================
+*/
+void CG_RotatePoint(vec3_t point, vec3_t matrix[3]) {
+	vec3_t tvec;
+
+	VectorCopy(point, tvec);
+	point[0] = DotProduct(matrix[0], tvec);
+	point[1] = DotProduct(matrix[1], tvec);
+	point[2] = DotProduct(matrix[2], tvec);
+}
+
+/*
 =========================
 CG_AdjustPositionForMover
 
@@ -682,6 +695,8 @@ void CG_AdjustPositionForMover(const vec3_t in, int moverNum, int fromTime, int 
 	centity_t	*cent;
 	vec3_t	oldOrigin, origin, deltaOrigin;
 	vec3_t	oldAngles, angles, deltaAngles;
+	vec3_t	matrix[3], transpose[3];
+	vec3_t	org, org2, move2;
 
 	if ( moverNum <= 0 || moverNum >= ENTITYNUM_MAX_NORMAL ) {
 		VectorCopy( in, out );
@@ -705,9 +720,17 @@ void CG_AdjustPositionForMover(const vec3_t in, int moverNum, int fromTime, int 
 	VectorSubtract( origin, oldOrigin, deltaOrigin );
 	VectorSubtract( angles, oldAngles, deltaAngles );
 
+	// origin change when on a rotating object
+	CG_CreateRotationMatrix( deltaAngles, transpose );
+	CG_TransposeMatrix( transpose, matrix );
+	VectorSubtract( in, oldOrigin, org );
+	VectorCopy( org, org2 );
+	CG_RotatePoint( org2, matrix );
+	VectorSubtract( org2, org, move2 );
+	VectorAdd( deltaOrigin, move2, deltaOrigin );
+
 	VectorAdd( in, deltaOrigin, out );
 	VectorAdd( angles_in, deltaAngles, angles_out );
-	// FIXME: origin change when on a rotating object
 }
 
 

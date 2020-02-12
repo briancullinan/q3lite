@@ -1,30 +1,5 @@
 #!/bin/bash
-#===========================================================================
-# Copyright (C) 2016-2017 cdev-tux github.com/cdev-tux
 #
-# This file is part of Q3lite Source Code. https://github.com/cdev-tux/q3lite
-#
-# Q3lite Source Code is free software; you can redistribute it
-# and/or modify it under the terms of the GNU General Public License as
-# published by the Free Software Foundation; either version 3 of the License,
-# or (at your option) any later version.
-#
-# Q3lite Source Code is distributed in the hope that it will be
-# useful, but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with Q3lite Source Code.  If not, see <http://www.gnu.org/licenses/>.
-#
-# In addition, Q3lite Source Code is also subject to certain additional terms.
-# You should have received a copy of these additional terms immediately following
-# the terms and conditions of the GNU General Public License.  If not, please
-# request a copy in writing from id Software at the address below.
-# If you have questions concerning this license or the applicable additional
-# terms, you may contact in writing id Software LLC, c/o ZeniMax Media Inc.,
-# Suite 120, Rockville, Maryland 20850 USA.
-#===========================================================================
 
 scriptname=$(basename "$0")
 
@@ -249,17 +224,17 @@ if [ -w $q3l_compile_path ]; then
 	# Enable colorized text for compiler warning/error messages.
 	export GCC_COLORS='error=01;31:warning=01;35:note=01;36:caret=01;32:locus=01:quote=01'
 
-	# Determine which Pi model we're compiling on so we can set the proper compiler flags and use all processor cores.
+	# Determine which Pi model we're compiling on so we can set the proper compiler flags.
 	if grep -i -q "^model name\s*:\s*ARMv" /proc/cpuinfo; then
 		while true
 		do
-			# Check if we're running on a Pi 3.
-			if grep -i -q "^Revision\s*:\s*[ 123][0-9a-f][0-9a-f][0-9a-f]08[0-9a-f]$" /proc/cpuinfo; then
+			# Check if we're running on a Pi 3, 3A+ or 3B+.
+			if grep -i -q "^Revision\s*:\s*[ 123]a[0-9a-f]20[0-9a-f][0-9a-f]$" /proc/cpuinfo || \
+			   grep -i -q "^Revision\s*:\s*[ 123][0-9a-f][0-9a-f][0-9a-f][0-9a-f]e[0-9a-f]$" /proc/cpuinfo; then
 				if [ -z "$1" ]; then
-					echo -e "\e[01;37mCompiling Q3lite on a Pi 3\n\e[0m"
+					echo -e "\e[01;37mCompiling Q3lite on a Pi 3, 3A+ or 3B+\n\e[0m"
 				fi
 				ptype="raspberrypi3"
-				cores="4"
 				break
 			fi
 			# Check if we're running on a Pi 2.
@@ -268,7 +243,6 @@ if [ -w $q3l_compile_path ]; then
 					echo -e "\e[01;37mCompiling Q3lite on a Pi 2\n\e[0m"
 				fi
 				ptype="raspberrypi2"
-				cores="4"
 				break
 			fi
 			# Check if we're running on a Pi 1.
@@ -278,7 +252,6 @@ if [ -w $q3l_compile_path ]; then
 					echo -e "\e[01;37mCompiling Q3lite on a Pi 1\n\e[0m"
 				fi
 				ptype="raspberrypi"
-				cores="1"
 				break
 			fi
 			# Check if we're running on a Pi Zero or Zero W.
@@ -287,7 +260,6 @@ if [ -w $q3l_compile_path ]; then
 					echo -e "\e[01;37mCompiling Q3lite on a Pi Zero or Zero W\n\e[0m"
 				fi
 				ptype="raspberrypi"
-				cores="1"
 				break
 			fi
 			# Default to safe settings if we're unable to determine the Pi model.
@@ -295,7 +267,6 @@ if [ -w $q3l_compile_path ]; then
 				echo -e "\e[01;33mCompiling Q3lite on an unknown Pi model\n\e[0m"
 			fi
 			ptype="raspberrypi"
-			cores="1"
 			break
 		done
 	else
@@ -309,7 +280,7 @@ if [ -w $q3l_compile_path ]; then
 	fi
 
 	# Set compile options below.
-	make -j$cores \
+	make -j$(nproc) \
 		V=0 \
 		BUILD_SERVER=1 \
 		BUILD_CLIENT=1 \
@@ -321,13 +292,10 @@ if [ -w $q3l_compile_path ]; then
 		SERVERBIN=q3ded \
 		CLIENTBIN=quake3 \
 		BUILD_RENDERER_OPENGL2=0 \
-		USE_RENDERER_DLOPEN=0 \
 		USE_OPENAL=0 \
 		USE_OPENAL_DLOPEN=0 \
 		USE_CURL=0 \
 		USE_CURL_DLOPEN=0 \
-		USE_CODEC_VORBIS=0 \
-		USE_CODEC_OPUS=0 \
 		USE_MUMBLE=0 \
 		USE_VOIP=0 \
 		USE_FREETYPE=0 \

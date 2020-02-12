@@ -1,30 +1,5 @@
 /*
-===========================================================================
-Copyright (C) 1999-2010 id Software LLC, a ZeniMax Media company.
 
-This file is part of Q3lite Source Code.
-
-Q3lite Source Code is free software; you can redistribute it
-and/or modify it under the terms of the GNU General Public License as
-published by the Free Software Foundation; either version 3 of the License,
-or (at your option) any later version.
-
-Q3lite Source Code is distributed in the hope that it will be
-useful, but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License
-along with Q3lite Source Code.  If not, see <http://www.gnu.org/licenses/>.
-
-In addition, Q3lite Source Code is also subject to certain additional terms.
-You should have received a copy of these additional terms immediately following
-the terms and conditions of the GNU General Public License.  If not, please
-request a copy in writing from id Software at the address below.
-If you have questions concerning this license or the applicable additional
-terms, you may contact in writing id Software LLC, c/o ZeniMax Media Inc.,
-Suite 120, Rockville, Maryland 20850 USA.
-===========================================================================
 */
 //
 
@@ -5353,7 +5328,33 @@ void BotSetEntityNumForGoal(bot_goal_t *goal, char *classname) {
 		if ( !ent->inuse ) {
 			continue;
 		}
-		if ( !Q_stricmp(ent->classname, classname) ) {
+		if ( Q_stricmp(ent->classname, classname) != 0 ) {
+			continue;
+		}
+		VectorSubtract(goal->origin, ent->s.origin, dir);
+		if (VectorLengthSquared(dir) < Square(10)) {
+			goal->entitynum = i;
+			return;
+		}
+	}
+}
+
+/*
+==================
+BotSetEntityNumForGoalWithActivator
+==================
+*/
+void BotSetEntityNumForGoalWithActivator(bot_goal_t *goal, char *classname) {
+	gentity_t *ent;
+	int i;
+	vec3_t dir;
+
+	ent = &g_entities[0];
+	for (i = 0; i < level.num_entities; i++, ent++) {
+		if ( !ent->inuse || !ent->activator ) {
+			continue;
+		}
+		if ( Q_stricmp(ent->activator->classname, classname) != 0 ) {
 			continue;
 		}
 		VectorSubtract(goal->origin, ent->s.origin, dir);
@@ -5434,21 +5435,21 @@ void BotSetupDeathmatchAI(void) {
 	else if (gametype == GT_OBELISK) {
 		if (trap_BotGetLevelItemGoal(-1, "Red Obelisk", &redobelisk) < 0)
 			BotAI_Print(PRT_WARNING, "Overload without Red Obelisk\n");
-		BotSetEntityNumForGoal(&redobelisk, "team_redobelisk");
+		BotSetEntityNumForGoalWithActivator(&redobelisk, "team_redobelisk");
 		if (trap_BotGetLevelItemGoal(-1, "Blue Obelisk", &blueobelisk) < 0)
 			BotAI_Print(PRT_WARNING, "Overload without Blue Obelisk\n");
-		BotSetEntityNumForGoal(&blueobelisk, "team_blueobelisk");
+		BotSetEntityNumForGoalWithActivator(&blueobelisk, "team_blueobelisk");
 	}
 	else if (gametype == GT_HARVESTER) {
 		if (trap_BotGetLevelItemGoal(-1, "Red Obelisk", &redobelisk) < 0)
 			BotAI_Print(PRT_WARNING, "Harvester without Red Obelisk\n");
-		BotSetEntityNumForGoal(&redobelisk, "team_redobelisk");
+		BotSetEntityNumForGoalWithActivator(&redobelisk, "team_redobelisk");
 		if (trap_BotGetLevelItemGoal(-1, "Blue Obelisk", &blueobelisk) < 0)
 			BotAI_Print(PRT_WARNING, "Harvester without Blue Obelisk\n");
-		BotSetEntityNumForGoal(&blueobelisk, "team_blueobelisk");
+		BotSetEntityNumForGoalWithActivator(&blueobelisk, "team_blueobelisk");
 		if (trap_BotGetLevelItemGoal(-1, "Neutral Obelisk", &neutralobelisk) < 0)
 			BotAI_Print(PRT_WARNING, "Harvester without Neutral Obelisk\n");
-		BotSetEntityNumForGoal(&neutralobelisk, "team_neutralobelisk");
+		BotSetEntityNumForGoalWithActivator(&neutralobelisk, "team_neutralobelisk");
 	}
 #endif
 

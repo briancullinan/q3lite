@@ -1,30 +1,5 @@
 /*
-===========================================================================
-Copyright (C) 1999-2010 id Software LLC, a ZeniMax Media company.
 
-This file is part of Q3lite Source Code.
-
-Q3lite Source Code is free software; you can redistribute it
-and/or modify it under the terms of the GNU General Public License as
-published by the Free Software Foundation; either version 3 of the License,
-or (at your option) any later version.
-
-Q3lite Source Code is distributed in the hope that it will be
-useful, but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License
-along with Q3lite Source Code.  If not, see <http://www.gnu.org/licenses/>.
-
-In addition, Q3lite Source Code is also subject to certain additional terms.
-You should have received a copy of these additional terms immediately following
-the terms and conditions of the GNU General Public License.  If not, please
-request a copy in writing from id Software at the address below.
-If you have questions concerning this license or the applicable additional
-terms, you may contact in writing id Software LLC, c/o ZeniMax Media Inc.,
-Suite 120, Rockville, Maryland 20850 USA.
-===========================================================================
 */
 
 #include <signal.h>
@@ -119,6 +94,14 @@ Restart the input subsystem
 */
 void Sys_In_Restart_f( void )
 {
+#ifndef DEDICATED
+	if( !SDL_WasInit( SDL_INIT_VIDEO ) )
+	{
+		Com_Printf( "in_restart: Cannot restart input while video is shutdown\n" );
+		return;
+	}
+#endif
+
 	IN_Restart( );
 }
 
@@ -328,7 +311,6 @@ cpuFeatures_t Sys_GetProcessorFeatures( void )
 	if( SDL_HasMMX( ) )        features |= CF_MMX;
 	if( SDL_HasSSE( ) )        features |= CF_SSE;
 	if( SDL_HasSSE2( ) )       features |= CF_SSE2;
-	if( SDL_HasAltiVec( ) )    features |= CF_ALTIVEC;
 #endif
 
 	return features;
@@ -713,10 +695,11 @@ int main( int argc, char **argv )
 	if( SDL_VERSIONNUM( ver.major, ver.minor, ver.patch ) <
 			SDL_VERSIONNUM( MINSDL_MAJOR, MINSDL_MINOR, MINSDL_PATCH ) )
 	{
-		Sys_CrashLog( va("\nERROR: \tQ3lite requires SDL2 version " MINSDL_VERSION " but the only version\n"
+		Sys_CrashLog( va("\nERROR: \tQ3lite requires SDL2 version " MINSDL_VERSION ", but the only version \n"
 			"\tfound was %d.%d.%d. You can try reinstalling Q3lite, or manually \n"
-			"\tdownloading and compiling SDL2-2.0.4 per instructions in\n"
-			"\tthe \"Compiling and Installation Guide\" in the Q3lite wiki.\n",
+			"\tdownloading and compiling SDL2 version " MINSDL_VERSION " or greater per \n"
+			"\tthe \"Compiling and Installation Guide\" in the Q3lite wiki. \n"
+			"\thttps://github.com/cdev-tux/q3lite/wiki/Compiling-Install-Guide \n",
 			ver.major, ver.minor, ver.patch ));
 
 		Sys_Exit( 1 );

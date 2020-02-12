@@ -1,30 +1,5 @@
 /*
-===========================================================================
-Copyright (C) 1999-2010 id Software LLC, a ZeniMax Media company.
 
-This file is part of Q3lite Source Code.
-
-Q3lite Source Code is free software; you can redistribute it
-and/or modify it under the terms of the GNU General Public License as
-published by the Free Software Foundation; either version 3 of the License,
-or (at your option) any later version.
-
-Q3lite Source Code is distributed in the hope that it will be
-useful, but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License
-along with Q3lite Source Code.  If not, see <http://www.gnu.org/licenses/>.
-
-In addition, Q3lite Source Code is also subject to certain additional terms.
-You should have received a copy of these additional terms immediately following
-the terms and conditions of the GNU General Public License.  If not, please
-request a copy in writing from id Software at the address below.
-If you have questions concerning this license or the applicable additional
-terms, you may contact in writing id Software LLC, c/o ZeniMax Media Inc.,
-Suite 120, Rockville, Maryland 20850 USA.
-===========================================================================
 */
 
 /*****************************************************************************
@@ -105,9 +80,9 @@ void S_Base_SoundInfo(void) {
 	if (!s_soundStarted) {
 		Com_Printf ("sound system not started\n");
 	} else {
-		Com_Printf("%5d stereo\n", dma.channels - 1);
+		Com_Printf("%5d channels\n", dma.channels);
 		Com_Printf("%5d samples\n", dma.samples);
-		Com_Printf("%5d samplebits\n", dma.samplebits);
+		Com_Printf("%5d samplebits (%s)\n", dma.samplebits, dma.isfloat ? "float" : "int");
 		Com_Printf("%5d submission_chunk\n", dma.submission_chunk);
 		Com_Printf("%5d speed\n", dma.speed);
 		Com_Printf("%p dma buffer\n", dma.buffer);
@@ -126,32 +101,31 @@ void S_Base_SoundInfo(void) {
 static
 void S_Base_StartCapture( void )
 {
-	// !!! FIXME: write me.
+	SNDDMA_StartCapture();
 }
 
 static
 int S_Base_AvailableCaptureSamples( void )
 {
-	// !!! FIXME: write me.
-	return 0;
+	return SNDDMA_AvailableCaptureSamples();
 }
 
 static
 void S_Base_Capture( int samples, byte *data )
 {
-	// !!! FIXME: write me.
+	SNDDMA_Capture(samples, data);
 }
 
 static
 void S_Base_StopCapture( void )
 {
-	// !!! FIXME: write me.
+	SNDDMA_StopCapture();
 }
 
 static
 void S_Base_MasterGain( float val )
 {
-	// !!! FIXME: write me.
+	SNDDMA_MasterGain(val);
 }
 #endif
 
@@ -373,7 +347,7 @@ sfxHandle_t	S_Base_RegisterSound( const char *name, qboolean compressed ) {
 
 	if ( sfx->soundData ) {
 		if ( sfx->defaultSound ) {
-			Com_Printf( S_COLOR_YELLOW "WARNING: could not find %s - using default\n", sfx->soundName );
+			Com_DPrintf( S_COLOR_YELLOW "WARNING: could not find %s - using default\n", sfx->soundName );
 			return 0;
 		}
 		return sfx - s_knownSfx;
@@ -385,7 +359,7 @@ sfxHandle_t	S_Base_RegisterSound( const char *name, qboolean compressed ) {
   S_memoryLoad(sfx);
 
 	if ( sfx->defaultSound ) {
-		Com_Printf( S_COLOR_YELLOW "WARNING: could not find %s - using default\n", sfx->soundName );
+		Com_DPrintf( S_COLOR_YELLOW "WARNING: could not find %s - using default\n", sfx->soundName );
 		return 0;
 	}
 
@@ -1250,9 +1224,6 @@ void S_GetSoundtime(void)
 	int		samplepos;
 	static	int		buffers;
 	static	int		oldsamplepos;
-	int		fullsamples;
-	
-	fullsamples = dma.samples / dma.channels;
 
 	if( CL_VideoRecording( ) )
 	{
@@ -1276,13 +1247,13 @@ void S_GetSoundtime(void)
 		if (s_paintedtime > 0x40000000)
 		{	// time to chop things off to avoid 32 bit limits
 			buffers = 0;
-			s_paintedtime = fullsamples;
+			s_paintedtime = dma.fullsamples;
 			S_Base_StopAllSounds ();
 		}
 	}
 	oldsamplepos = samplepos;
 
-	s_soundtime = buffers*fullsamples + samplepos/dma.channels;
+	s_soundtime = buffers*dma.fullsamples + samplepos/dma.channels;
 
 #if 0
 // check to make sure that we haven't overshot
@@ -1303,7 +1274,6 @@ void S_GetSoundtime(void)
 
 void S_Update_(void) {
 	unsigned        endtime;
-	int				samps;
 	static			float	lastTime = 0.0f;
 	float			ma, op;
 	float			thisTime, sane;
@@ -1347,9 +1317,8 @@ void S_Update_(void) {
 		& ~(dma.submission_chunk-1);
 
 	// never mix more than the complete buffer
-	samps = dma.samples >> (dma.channels-1);
-	if (endtime - s_soundtime > samps)
-		endtime = s_soundtime + samps;
+	if (endtime - s_soundtime > dma.fullsamples)
+		endtime = s_soundtime + dma.fullsamples;
 
 
 

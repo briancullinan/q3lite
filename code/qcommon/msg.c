@@ -1,30 +1,5 @@
 /*
-===========================================================================
-Copyright (C) 1999-2010 id Software LLC, a ZeniMax Media company.
 
-This file is part of Q3lite Source Code.
-
-Q3lite Source Code is free software; you can redistribute it
-and/or modify it under the terms of the GNU General Public License as
-published by the Free Software Foundation; either version 3 of the License,
-or (at your option) any later version.
-
-Q3lite Source Code is distributed in the hope that it will be
-useful, but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License
-along with Q3lite Source Code.  If not, see <http://www.gnu.org/licenses/>.
-
-In addition, Q3lite Source Code is also subject to certain additional terms.
-You should have received a copy of these additional terms immediately following
-the terms and conditions of the GNU General Public License.  If not, please
-request a copy in writing from id Software at the address below.
-If you have questions concerning this license or the applicable additional
-terms, you may contact in writing id Software LLC, c/o ZeniMax Media Inc.,
-Suite 120, Rockville, Maryland 20850 USA.
-===========================================================================
 */
 #include "q_shared.h"
 #include "qcommon.h"
@@ -242,7 +217,7 @@ int MSG_ReadBits( msg_t *msg, int bits ) {
 			for ( i = 0; i < bits; i += 8 )
 			{
 				bitIndex += HuffmanGetSymbol( &sym, buffer, bitIndex );
-				value |= ( sym << (i+nbits) );
+				value = ( unsigned int )value | ( ( unsigned int )sym << ( i+nbits ) );
 			}
 		}
 		msg->bit = bitIndex;
@@ -449,12 +424,14 @@ char *MSG_ReadString( msg_t *msg ) {
 		if ( c > 127 ) {
 			c = '.';
 		}
-
-		string[l] = c;
-		l++;
-	} while (l < sizeof(string)-1);
+		// break only after reading all expected data from bitstream
+		if ( l >= sizeof(string)-1 ) {
+			break;
+		}
+		string[l++] = c;
+	} while (1);
 	
-	string[l] = 0;
+	string[l] = '\0';
 	
 	return string;
 }
@@ -477,12 +454,14 @@ char *MSG_ReadBigString( msg_t *msg ) {
 		if ( c > 127 ) {
 			c = '.';
 		}
-
-		string[l] = c;
-		l++;
-	} while (l < sizeof(string)-1);
+		// break only after reading all expected data from bitstream
+		if ( l >= sizeof(string)-1 ) {
+			break;
+		}
+		string[l++] = c;
+	} while (1);
 	
-	string[l] = 0;
+	string[l] = '\0';
 	
 	return string;
 }
@@ -505,12 +484,14 @@ char *MSG_ReadStringLine( msg_t *msg ) {
 		if ( c > 127 ) {
 			c = '.';
 		}
-
-		string[l] = c;
-		l++;
-	} while (l < sizeof(string)-1);
+		// break only after reading all expected data from bitstream
+		if ( l >= sizeof(string)-1 ) {
+			break;
+		}
+		string[l++] = c;
+	} while (1);
 	
-	string[l] = 0;
+	string[l] = '\0';
 	
 	return string;
 }
@@ -543,54 +524,9 @@ int MSG_HashKey(const char *string, int maxlen) {
 	return hash;
 }
 
-/*
-=============================================================================
-
-delta functions
-  
-=============================================================================
-*/
-
 extern cvar_t *cl_shownet;
 
 #define	LOG(x) if( cl_shownet && cl_shownet->integer == 4 ) { Com_Printf("%s ", x ); };
-
-void MSG_WriteDelta( msg_t *msg, int oldV, int newV, int bits ) {
-	if ( oldV == newV ) {
-		MSG_WriteBits( msg, 0, 1 );
-		return;
-	}
-	MSG_WriteBits( msg, 1, 1 );
-	MSG_WriteBits( msg, newV, bits );
-}
-
-int	MSG_ReadDelta( msg_t *msg, int oldV, int bits ) {
-	if ( MSG_ReadBits( msg, 1 ) ) {
-		return MSG_ReadBits( msg, bits );
-	}
-	return oldV;
-}
-
-void MSG_WriteDeltaFloat( msg_t *msg, float oldV, float newV ) {
-	floatint_t fi;
-	if ( oldV == newV ) {
-		MSG_WriteBits( msg, 0, 1 );
-		return;
-	}
-	fi.f = newV;
-	MSG_WriteBits( msg, 1, 1 );
-	MSG_WriteBits( msg, fi.i, 32 );
-}
-
-float MSG_ReadDeltaFloat( msg_t *msg, float oldV ) {
-	if ( MSG_ReadBits( msg, 1 ) ) {
-		floatint_t fi;
-
-		fi.i = MSG_ReadBits( msg, 32 );
-		return fi.f;
-	}
-	return oldV;
-}
 
 /*
 =============================================================================

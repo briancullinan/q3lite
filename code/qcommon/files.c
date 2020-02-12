@@ -1,30 +1,5 @@
 /*
-===========================================================================
-Copyright (C) 1999-2010 id Software LLC, a ZeniMax Media company.
 
-This file is part of Q3lite Source Code.
-
-Q3lite Source Code is free software; you can redistribute it
-and/or modify it under the terms of the GNU General Public License as
-published by the Free Software Foundation; either version 3 of the License,
-or (at your option) any later version.
-
-Q3lite Source Code is distributed in the hope that it will be
-useful, but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License
-along with Q3lite Source Code.  If not, see <http://www.gnu.org/licenses/>.
-
-In addition, Q3lite Source Code is also subject to certain additional terms.
-You should have received a copy of these additional terms immediately following
-the terms and conditions of the GNU General Public License.  If not, please
-request a copy in writing from id Software at the address below.
-If you have questions concerning this license or the applicable additional
-terms, you may contact in writing id Software LLC, c/o ZeniMax Media Inc.,
-Suite 120, Rockville, Maryland 20850 USA.
-===========================================================================
 */
 /*****************************************************************************
  * name:		files.c
@@ -2498,19 +2473,22 @@ void FS_GetModDescription( const char *modDir, char *description, int descriptio
 	int				nDescLen;
 	FILE			*file;
 
-	Com_sprintf( descPath, sizeof ( descPath ), "%s/description.txt", modDir );
+	Com_sprintf( descPath, sizeof ( descPath ), "%s%cdescription.txt", modDir, PATH_SEP );
 	nDescLen = FS_SV_FOpenFileRead( descPath, &descHandle );
 
-	if ( nDescLen > 0 && descHandle ) {
+	if ( nDescLen > 0 ) {
 		file = FS_FileForHandle(descHandle);
 		Com_Memset( description, 0, descriptionLen );
 		nDescLen = fread(description, 1, descriptionLen, file);
 		if (nDescLen >= 0) {
 			description[nDescLen] = '\0';
 		}
-		FS_FCloseFile(descHandle);
 	} else {
 		Q_strncpyz( description, modDir, descriptionLen );
+	}
+
+	if ( descHandle ) {
+		FS_FCloseFile( descHandle );
 	}
 }
 
@@ -3079,13 +3057,12 @@ qboolean FS_CheckDirTraversal(const char *checkdir)
 FS_InvalidGameDir
 
 return true if path is a reference to current directory or directory traversal
+or a sub-directory
 ================
 */
 qboolean FS_InvalidGameDir( const char *gamedir ) {
 	if ( !strcmp( gamedir, "." ) || !strcmp( gamedir, ".." )
-		|| !strcmp( gamedir, "/" ) || !strcmp( gamedir, "\\" )
-		|| strstr( gamedir, "/.." ) || strstr( gamedir, "\\.." )
-		|| FS_CheckDirTraversal( gamedir ) ) {
+		|| strchr( gamedir, '/' ) || strchr( gamedir, '\\' ) ) {
 		return qtrue;
 	}
 
@@ -3466,17 +3443,17 @@ static void FS_CheckPak0( void )
 {
 	searchpath_t	*path;
 	pack_t		*curpack;
+	const char	*pakBasename;
 	qboolean founddemo = qfalse;
 	unsigned int foundPak = 0, foundTA = 0;
 
 	for( path = fs_searchpaths; path; path = path->next )
 	{
-		const char* pakBasename = path->pack->pakBasename;
-
 		if(!path->pack)
 			continue;
 
 		curpack = path->pack;
+		pakBasename = curpack->pakBasename;
 
 		if(!Q_stricmpn( curpack->pakGamename, "demoq3", MAX_OSPATH )
 				&& !Q_stricmpn( pakBasename, "pak0", MAX_OSPATH ))

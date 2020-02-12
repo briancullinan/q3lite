@@ -1,30 +1,5 @@
 /*
-===========================================================================
-Copyright (C) 1999-2010 id Software LLC, a ZeniMax Media company.
 
-This file is part of Q3lite Source Code.
-
-Q3lite Source Code is free software; you can redistribute it
-and/or modify it under the terms of the GNU General Public License as
-published by the Free Software Foundation; either version 3 of the License,
-or (at your option) any later version.
-
-Q3lite Source Code is distributed in the hope that it will be
-useful, but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License
-along with Q3lite Source Code.  If not, see <http://www.gnu.org/licenses/>.
-
-In addition, Q3lite Source Code is also subject to certain additional terms.
-You should have received a copy of these additional terms immediately following
-the terms and conditions of the GNU General Public License.  If not, please
-request a copy in writing from id Software at the address below.
-If you have questions concerning this license or the applicable additional
-terms, you may contact in writing id Software LLC, c/o ZeniMax Media Inc.,
-Suite 120, Rockville, Maryland 20850 USA.
-===========================================================================
 */
 // tr_image.c
 #include "tr_local.h"
@@ -229,7 +204,6 @@ void R_ImageList_f( void ) {
 				estSize *= 4;
 				break;
 			case GL_LUMINANCE8:
-			case GL_LUMINANCE16:
 			case GL_LUMINANCE:
 				format = "L      ";
 				// 1 byte per pixel?
@@ -242,7 +216,6 @@ void R_ImageList_f( void ) {
 				estSize *= 3;
 				break;
 			case GL_LUMINANCE8_ALPHA8:
-			case GL_LUMINANCE16_ALPHA16:
 			case GL_LUMINANCE_ALPHA:
 				format = "LA     ";
 				// 2 bytes per pixel?
@@ -1731,10 +1704,8 @@ static GLenum RawImage_GetFormat(const byte *data, int numPixels, GLenum picForm
 		{
 			if(r_greyscale->integer)
 			{
-				if(r_texturebits->integer == 16)
+				if(r_texturebits->integer == 16 || r_texturebits->integer == 32)
 					internalFormat = GL_LUMINANCE8;
-				else if(r_texturebits->integer == 32)
-					internalFormat = GL_LUMINANCE16;
 				else
 					internalFormat = GL_LUMINANCE;
 			}
@@ -1770,10 +1741,8 @@ static GLenum RawImage_GetFormat(const byte *data, int numPixels, GLenum picForm
 		{
 			if(r_greyscale->integer)
 			{
-				if(r_texturebits->integer == 16)
+				if(r_texturebits->integer == 16 || r_texturebits->integer == 32)
 					internalFormat = GL_LUMINANCE8_ALPHA8;
-				else if(r_texturebits->integer == 32)
-					internalFormat = GL_LUMINANCE16_ALPHA16;
 				else
 					internalFormat = GL_LUMINANCE_ALPHA;
 			}
