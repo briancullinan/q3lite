@@ -1,22 +1,29 @@
 /*
 ===========================================================================
-Copyright (C) 1999-2005 Id Software, Inc.
+Copyright (C) 1999-2010 id Software LLC, a ZeniMax Media company.
 
-This file is part of Quake III Arena source code.
+This file is part of Q3lite Source Code.
 
-Quake III Arena source code is free software; you can redistribute it
+Q3lite Source Code is free software; you can redistribute it
 and/or modify it under the terms of the GNU General Public License as
-published by the Free Software Foundation; either version 2 of the License,
+published by the Free Software Foundation; either version 3 of the License,
 or (at your option) any later version.
 
-Quake III Arena source code is distributed in the hope that it will be
+Q3lite Source Code is distributed in the hope that it will be
 useful, but WITHOUT ANY WARRANTY; without even the implied warranty of
 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with Quake III Arena source code; if not, write to the Free Software
-Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+along with Q3lite Source Code.  If not, see <http://www.gnu.org/licenses/>.
+
+In addition, Q3lite Source Code is also subject to certain additional terms.
+You should have received a copy of these additional terms immediately following
+the terms and conditions of the GNU General Public License.  If not, please
+request a copy in writing from id Software at the address below.
+If you have questions concerning this license or the applicable additional
+terms, you may contact in writing id Software LLC, c/o ZeniMax Media Inc.,
+Suite 120, Rockville, Maryland 20850 USA.
 ===========================================================================
 */
 // console.c
@@ -630,6 +637,26 @@ void Con_DrawNotify (void)
 
 }
 
+// Rainbow color effect
+static vec4_t conColourTable[15] = {
+	{1, 0, 0, 1},		//conColorRed
+	{1, 0.25f, 0, 1},	//conColorRedOrange
+	{1, 0.5f, 0, 1},	//conColorOrange
+	{1, 0.75f, 0, 1},	//conColorOrangeYellow
+	{1, 1, 0, 1},		//conColorYellow
+	{0.5f, 1, 0, 1},	//conColorYellowGreen
+	{0, 1, 0, 1},		//conColorGreen
+	{0, 1, 0.25f, 1},	//conColorGreenTurq
+	{0, 1, 0.5f, 1},	//conColorTurquoise
+	{0, 1, 1, 1},		//conColorCyan
+	{0, 0.5f, 1, 1},	//conColorCyanBlue
+//	{0, 0, 1, 1},		//conColorBlue
+	{0.25f, 0, 1, 1},	//conColorBluePurple
+	{0.5f, 0, 1, 1},	//conColorPurple
+	{1, 0, 1, 1},		//conColorPink
+	{1, 0, 0.5f, 1}		//conColorMagenta
+};
+
 /*
 ================
 Con_DrawSolidConsole
@@ -674,15 +701,16 @@ void Con_DrawSolidConsole( float frac ) {
 	SCR_FillRect( 0, y, SCREEN_WIDTH, 2, color );
 
 
-	// draw the version number
-
-	re.SetColor( g_color_table[ColorIndex(COLOR_RED)] );
-
+	// draw the version number with color cycling
 	i = strlen( Q3_VERSION );
-
+	y = (cls.realtime >> 6);
 	for (x=0 ; x<i ; x++) {
-		SCR_DrawSmallChar( cls.glconfig.vidWidth - ( i - x + 1 ) * SMALLCHAR_WIDTH,
-			lines - SMALLCHAR_HEIGHT, Q3_VERSION[x] );
+		if (Q3_VERSION[x] ==' ')
+			continue;
+		re.SetColor( conColourTable[y&14] );
+		y++;
+		SCR_DrawSmallChar( cls.glconfig.vidWidth - ( i - x +1) * SMALLCHAR_WIDTH,
+			(lines-(SMALLCHAR_HEIGHT+SMALLCHAR_HEIGHT/2)), Q3_VERSION[x] );
 	}
 
 

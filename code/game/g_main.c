@@ -1,22 +1,29 @@
 /*
 ===========================================================================
-Copyright (C) 1999-2005 Id Software, Inc.
+Copyright (C) 1999-2010 id Software LLC, a ZeniMax Media company.
 
-This file is part of Quake III Arena source code.
+This file is part of Q3lite Source Code.
 
-Quake III Arena source code is free software; you can redistribute it
+Q3lite Source Code is free software; you can redistribute it
 and/or modify it under the terms of the GNU General Public License as
-published by the Free Software Foundation; either version 2 of the License,
+published by the Free Software Foundation; either version 3 of the License,
 or (at your option) any later version.
 
-Quake III Arena source code is distributed in the hope that it will be
+Q3lite Source Code is distributed in the hope that it will be
 useful, but WITHOUT ANY WARRANTY; without even the implied warranty of
 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with Quake III Arena source code; if not, write to the Free Software
-Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+along with Q3lite Source Code.  If not, see <http://www.gnu.org/licenses/>.
+
+In addition, Q3lite Source Code is also subject to certain additional terms.
+You should have received a copy of these additional terms immediately following
+the terms and conditions of the GNU General Public License.  If not, please
+request a copy in writing from id Software at the address below.
+If you have questions concerning this license or the applicable additional
+terms, you may contact in writing id Software LLC, c/o ZeniMax Media Inc.,
+Suite 120, Rockville, Maryland 20850 USA.
 ===========================================================================
 */
 //
@@ -82,6 +89,7 @@ vmCvar_t	pmove_msec;
 vmCvar_t	g_rankings;
 vmCvar_t	g_listEntity;
 vmCvar_t	g_localTeamPref;
+vmCvar_t	g_intermissionDuration;
 #ifdef MISSIONPACK
 vmCvar_t	g_obeliskHealth;
 vmCvar_t	g_obeliskRegenPeriod;
@@ -178,7 +186,8 @@ static cvarTable_t		gameCvarTable[] = {
 	{ &pmove_msec, "pmove_msec", "8", CVAR_SYSTEMINFO, 0, qfalse},
 
 	{ &g_rankings, "g_rankings", "0", 0, 0, qfalse},
-	{ &g_localTeamPref, "g_localTeamPref", "", 0, 0, qfalse }
+	{ &g_localTeamPref, "g_localTeamPref", "", 0, 0, qfalse },
+	{ &g_intermissionDuration, "g_intermissionDuration", "0", CVAR_ARCHIVE, 0, qtrue  }
 
 };
 
@@ -1275,6 +1284,17 @@ void CheckIntermissionExit( void ) {
 
 	// only test ready status when there are real players present
 	if ( playerCount > 0 ) {
+		// end intermission if duration timelimit is reached
+		if (  g_intermissionDuration.integer > 0 ) {
+			if ( g_intermissionDuration.integer > 30 ) {
+				trap_Cvar_Set( "g_intermissionDuration", "30" );
+			}
+			if ( level.time > level.intermissiontime + ( g_intermissionDuration.integer * 1000 )) {
+				ExitLevel();
+				return;
+			}
+		}
+
 		// if nobody wants to go, clear timer
 		if ( !ready ) {
 			level.readyToExit = qfalse;
@@ -1366,12 +1386,24 @@ void CheckExitRules( void ) {
 		return;
 	}
 
+	if ( g_timelimit.integer < 0 || g_timelimit.integer > INT_MAX / 60000 ) {
+		G_Printf( "timelimit %i is out of range, defaulting to 0\n", g_timelimit.integer );
+		trap_Cvar_Set( "timelimit", "0" );
+		trap_Cvar_Update( &g_timelimit );
+	}
+
 	if ( g_timelimit.integer && !level.warmupTime ) {
 		if ( level.time - level.startTime >= g_timelimit.integer*60000 ) {
 			trap_SendServerCommand( -1, "print \"Timelimit hit.\n\"");
 			LogExit( "Timelimit hit." );
 			return;
 		}
+	}
+
+	if ( g_fraglimit.integer < 0 ) {
+		G_Printf( "fraglimit %i is out of range, defaulting to 0\n", g_fraglimit.integer );
+		trap_Cvar_Set( "fraglimit", "0" );
+		trap_Cvar_Update( &g_fraglimit );
 	}
 
 	if ( g_gametype.integer < GT_CTF && g_fraglimit.integer ) {
@@ -1405,6 +1437,12 @@ void CheckExitRules( void ) {
 		}
 	}
 
+	if ( g_capturelimit.integer < 0 ) {
+		G_Printf( "capturelimit %i is out of range, defaulting to 0\n", g_capturelimit.integer );
+		trap_Cvar_Set( "capturelimit", "0" );
+		trap_Cvar_Update( &g_capturelimit );
+	}
+
 	if ( g_gametype.integer >= GT_CTF && g_capturelimit.integer ) {
 
 		if ( level.teamScores[TEAM_RED] >= g_capturelimit.integer ) {
@@ -1419,6 +1457,25 @@ void CheckExitRules( void ) {
 			return;
 		}
 	}
+}
+
+/*
+=================
+ForceVoteFail
+
+Used to force a callvote to fail
+=================
+*/
+void ForceVoteFail( void ) {
+	level.voteTime = 0;
+	level.voteExecuteTime = 0;
+	level.voteString[0] = 0;
+	level.voteDisplayString[0] = 0;
+	level.voteClientNum = -1;
+	trap_SetConfigstring( CS_VOTE_TIME, "" );
+	trap_SetConfigstring( CS_VOTE_STRING, "" );
+	trap_SetConfigstring( CS_VOTE_YES, "" );
+	trap_SetConfigstring( CS_VOTE_NO, "" );
 }
 
 
@@ -1568,6 +1625,15 @@ void CheckVote( void ) {
 	if ( !level.voteTime ) {
 		return;
 	}
+	// check if vote caller is still in the game and fail the vote if not
+	if ( level.voteClientNum >= 0 && level.voteClientNum < MAX_CLIENTS ) {
+		if ( level.clients[ level.voteClientNum ].pers.connected != CON_CONNECTED ||
+			level.clients[ level.voteClientNum ].sess.sessionTeam == TEAM_SPECTATOR ) {
+				ForceVoteFail();
+				trap_SendServerCommand( -1, "print \"Vote failed.\n\"" );
+				return;
+		}
+	}
 	if ( level.time - level.voteTime >= VOTE_TIME ) {
 		trap_SendServerCommand( -1, "print \"Vote failed.\n\"" );
 	} else {
@@ -1584,6 +1650,7 @@ void CheckVote( void ) {
 			return;
 		}
 	}
+	level.voteClientNum = -1;
 	level.voteTime = 0;
 	trap_SetConfigstring( CS_VOTE_TIME, "" );
 
@@ -1686,6 +1753,15 @@ void CheckTeamVote( int team ) {
 	if ( !level.teamVoteTime[cs_offset] ) {
 		return;
 	}
+	// check if vote caller is still in the game and fail the vote if not
+	if ( level.voteClientNum >= 0 && level.voteClientNum < MAX_CLIENTS ) {
+		if ( level.clients[ level.voteClientNum ].pers.connected != CON_CONNECTED ||
+			level.clients[ level.voteClientNum ].sess.sessionTeam == TEAM_SPECTATOR ) {
+				ForceVoteFail();
+				trap_SendServerCommand( -1, "print \"Vote failed.\n\"" );
+				return;
+		}
+	}
 	if ( level.time - level.teamVoteTime[cs_offset] >= VOTE_TIME ) {
 		trap_SendServerCommand( -1, "print \"Team vote failed.\n\"" );
 	} else {
@@ -1708,6 +1784,7 @@ void CheckTeamVote( int team ) {
 			return;
 		}
 	}
+	level.voteClientNum = -1;
 	level.teamVoteTime[cs_offset] = 0;
 	trap_SetConfigstring( CS_TEAMVOTE_TIME + cs_offset, "" );
 

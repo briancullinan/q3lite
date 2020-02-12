@@ -1,22 +1,29 @@
 /*
 ===========================================================================
-Copyright (C) 1999-2005 Id Software, Inc.
+Copyright (C) 1999-2010 id Software LLC, a ZeniMax Media company.
 
-This file is part of Quake III Arena source code.
+This file is part of Q3lite Source Code.
 
-Quake III Arena source code is free software; you can redistribute it
+Q3lite Source Code is free software; you can redistribute it
 and/or modify it under the terms of the GNU General Public License as
-published by the Free Software Foundation; either version 2 of the License,
+published by the Free Software Foundation; either version 3 of the License,
 or (at your option) any later version.
 
-Quake III Arena source code is distributed in the hope that it will be
+Q3lite Source Code is distributed in the hope that it will be
 useful, but WITHOUT ANY WARRANTY; without even the implied warranty of
 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with Quake III Arena source code; if not, write to the Free Software
-Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+along with Q3lite Source Code.  If not, see <http://www.gnu.org/licenses/>.
+
+In addition, Q3lite Source Code is also subject to certain additional terms.
+You should have received a copy of these additional terms immediately following
+the terms and conditions of the GNU General Public License.  If not, please
+request a copy in writing from id Software at the address below.
+If you have questions concerning this license or the applicable additional
+terms, you may contact in writing id Software LLC, c/o ZeniMax Media Inc.,
+Suite 120, Rockville, Maryland 20850 USA.
 ===========================================================================
 */
 
@@ -49,6 +56,22 @@ static char steamPath[ MAX_OSPATH ] = { 0 };
 
 // Used to store the GOG Quake 3 installation path
 static char gogPath[ MAX_OSPATH ] = { 0 };
+
+static const char *timestamp(void)
+{
+    time_t t = time(NULL);
+    char *retval = asctime(localtime(&t));
+    if (retval) {
+        char *ptr;
+        for (ptr = retval; *ptr; ptr++) {
+            if ((*ptr == '\r') || (*ptr == '\n')) {
+                *ptr = '\0';
+                break;
+            }
+        }
+    }
+    return retval ? retval : "[date unknown]";
+}
 
 /*
 ==================
@@ -552,9 +575,11 @@ void Sys_ErrorDialog( const char *error )
 
 	Sys_Print( va( "%s\n", error ) );
 
+/* Disable Sys_Dialog boxes with the OpenGL ES renderer.
 #ifndef DEDICATED
 	Sys_Dialog( DT_ERROR, va( "%s. See \"%s\" for details.", error, ospath ), "Error" );
 #endif
+*/
 
 	// Make sure the write path for the crashlog exists...
 
@@ -581,6 +606,62 @@ void Sys_ErrorDialog( const char *error )
 	}
 
 	// We're crashing, so we don't care much if write() or close() fails.
+	while( ( size = CON_LogRead( buffer, sizeof( buffer ) ) ) > 0 ) {
+		if( write( f, buffer, size ) != size ) {
+			Com_Printf( "ERROR: couldn't fully write to %s\n", fileName );
+			break;
+		}
+	}
+
+	close( f );
+}
+
+/*
+==============
+Sys_CrashLog
+
+Send error messages to crashlog.txt. This can be used
+for errors that happen before cvars are initialized.
+==============
+*/
+void Sys_CrashLog( const char *error )
+{
+	char buffer[ 1024 ];
+	unsigned int size;
+	int f = -1;
+	const char *homepath = (strcat( getenv ( "HOME" ), "/.q3a"));
+	const char *gamedir = "baseq3";
+	const char *fileName = "crashlog.txt";
+	char *dirpath = FS_BuildOSPath( homepath, gamedir, "");
+	char *ospath = FS_BuildOSPath( homepath, gamedir, fileName );
+
+	// Print crash log header/timestamp.
+	Sys_Print( va( "\n===================== %s =====================", timestamp() ) );
+
+	// Print error message.
+	Sys_Print( va( "\n%s\n", error ) );
+
+	// Make sure the write path for the crashlog exists...
+	if(!Sys_Mkdir(homepath))
+	{
+		Com_Printf("ERROR: couldn't create path '%s' for crash log.\n", homepath);
+		return;
+	}
+
+	if(!Sys_Mkdir(dirpath))
+	{
+		Com_Printf("ERROR: couldn't create path '%s' for crash log.\n", dirpath);
+		return;
+	}
+
+	// Use the Unix system APIs to write the crash log.
+	f = open( ospath, O_CREAT | O_TRUNC | O_WRONLY, 0640 );
+	if( f == -1 )
+	{
+		Com_Printf( "ERROR: couldn't open %s\n", fileName );
+		return;
+	}
+
 	while( ( size = CON_LogRead( buffer, sizeof( buffer ) ) ) > 0 ) {
 		if( write( f, buffer, size ) != size ) {
 			Com_Printf( "ERROR: couldn't fully write to %s\n", fileName );

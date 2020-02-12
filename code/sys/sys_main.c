@@ -1,22 +1,29 @@
 /*
 ===========================================================================
-Copyright (C) 1999-2005 Id Software, Inc.
+Copyright (C) 1999-2010 id Software LLC, a ZeniMax Media company.
 
-This file is part of Quake III Arena source code.
+This file is part of Q3lite Source Code.
 
-Quake III Arena source code is free software; you can redistribute it
+Q3lite Source Code is free software; you can redistribute it
 and/or modify it under the terms of the GNU General Public License as
-published by the Free Software Foundation; either version 2 of the License,
+published by the Free Software Foundation; either version 3 of the License,
 or (at your option) any later version.
 
-Quake III Arena source code is distributed in the hope that it will be
+Q3lite Source Code is distributed in the hope that it will be
 useful, but WITHOUT ANY WARRANTY; without even the implied warranty of
 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with Quake III Arena source code; if not, write to the Free Software
-Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+along with Q3lite Source Code.  If not, see <http://www.gnu.org/licenses/>.
+
+In addition, Q3lite Source Code is also subject to certain additional terms.
+You should have received a copy of these additional terms immediately following
+the terms and conditions of the GNU General Public License.  If not, please
+request a copy in writing from id Software at the address below.
+If you have questions concerning this license or the applicable additional
+terms, you may contact in writing id Software LLC, c/o ZeniMax Media Inc.,
+Suite 120, Rockville, Maryland 20850 USA.
 ===========================================================================
 */
 
@@ -112,6 +119,14 @@ Restart the input subsystem
 */
 void Sys_In_Restart_f( void )
 {
+#ifndef DEDICATED
+	if( !SDL_WasInit( SDL_INIT_VIDEO ) )
+	{
+		Com_Printf( "in_restart: Cannot restart input while video is shutdown\n" );
+		return;
+	}
+#endif
+
 	IN_Restart( );
 }
 
@@ -237,6 +252,9 @@ static qboolean Sys_WritePIDFile( const char *gamedir )
 	else
 		Com_Printf( S_COLOR_YELLOW "Couldn't write %s.\n", pidFile );
 
+	// Disable Sys_Dialog boxes with the OpenGL ES renderer.
+	stale = qfalse;
+
 	return stale;
 }
 
@@ -318,7 +336,6 @@ cpuFeatures_t Sys_GetProcessorFeatures( void )
 	if( SDL_HasMMX( ) )        features |= CF_MMX;
 	if( SDL_HasSSE( ) )        features |= CF_SSE;
 	if( SDL_HasSSE2( ) )       features |= CF_SSE2;
-	if( SDL_HasAltiVec( ) )    features |= CF_ALTIVEC;
 #endif
 
 	return features;
@@ -683,9 +700,6 @@ int main( int argc, char **argv )
 	int   i;
 	char  commandLine[ MAX_STRING_CHARS ] = { 0 };
 
-	extern void Sys_LaunchAutoupdater(int argc, char **argv);
-	Sys_LaunchAutoupdater(argc, argv);
-
 #ifndef DEDICATED
 	// SDL version check
 
@@ -706,9 +720,12 @@ int main( int argc, char **argv )
 	if( SDL_VERSIONNUM( ver.major, ver.minor, ver.patch ) <
 			SDL_VERSIONNUM( MINSDL_MAJOR, MINSDL_MINOR, MINSDL_PATCH ) )
 	{
-		Sys_Dialog( DT_ERROR, va( "SDL version " MINSDL_VERSION " or greater is required, "
-			"but only version %d.%d.%d was found. You may be able to obtain a more recent copy "
-			"from http://www.libsdl.org/.", ver.major, ver.minor, ver.patch ), "SDL Library Too Old" );
+		Sys_CrashLog( va("\nERROR: \tQ3lite requires SDL2 version " MINSDL_VERSION ", but the only version \n"
+			"\tfound was %d.%d.%d. You can try reinstalling Q3lite, or manually \n"
+			"\tdownloading and compiling SDL2 version " MINSDL_VERSION " or greater per \n"
+			"\tthe \"Compiling and Installation Guide\" in the Q3lite wiki. \n"
+			"\thttps://github.com/cdev-tux/q3lite/wiki/Compiling-Install-Guide \n",
+			ver.major, ver.minor, ver.patch ));
 
 		Sys_Exit( 1 );
 	}

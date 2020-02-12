@@ -1,22 +1,29 @@
 /*
 ===========================================================================
-Copyright (C) 1999-2005 Id Software, Inc.
+Copyright (C) 1999-2010 id Software LLC, a ZeniMax Media company.
 
-This file is part of Quake III Arena source code.
+This file is part of Q3lite Source Code.
 
-Quake III Arena source code is free software; you can redistribute it
+Q3lite Source Code is free software; you can redistribute it
 and/or modify it under the terms of the GNU General Public License as
-published by the Free Software Foundation; either version 2 of the License,
+published by the Free Software Foundation; either version 3 of the License,
 or (at your option) any later version.
 
-Quake III Arena source code is distributed in the hope that it will be
+Q3lite Source Code is distributed in the hope that it will be
 useful, but WITHOUT ANY WARRANTY; without even the implied warranty of
 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with Quake III Arena source code; if not, write to the Free Software
-Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+along with Q3lite Source Code.  If not, see <http://www.gnu.org/licenses/>.
+
+In addition, Q3lite Source Code is also subject to certain additional terms.
+You should have received a copy of these additional terms immediately following
+the terms and conditions of the GNU General Public License.  If not, please
+request a copy in writing from id Software at the address below.
+If you have questions concerning this license or the applicable additional
+terms, you may contact in writing id Software LLC, c/o ZeniMax Media Inc.,
+Suite 120, Rockville, Maryland 20850 USA.
 ===========================================================================
 */
 /*
@@ -28,8 +35,16 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 #ifdef USE_LOCAL_HEADERS
 #	include "SDL_opengl.h"
+#	include "SDL_opengles.h"
+#	include "SDL_egl.h"
 #else
 #	include <SDL_opengl.h>
+#	include <SDL_opengles.h>
+#	include <SDL_egl.h>
+#endif
+
+#ifndef APIENTRYP
+#define APIENTRYP APIENTRY *
 #endif
 
 extern void (APIENTRYP qglActiveTextureARB) (GLenum texture);
@@ -39,33 +54,29 @@ extern void (APIENTRYP qglMultiTexCoord2fARB) (GLenum target, GLfloat s, GLfloat
 extern void (APIENTRYP qglLockArraysEXT) (GLint first, GLsizei count);
 extern void (APIENTRYP qglUnlockArraysEXT) (void);
 
+extern void myglMultiTexCoord2f( GLenum texture, GLfloat s, GLfloat t );
 
 //===========================================================================
 
 // GL function loader, based on https://gist.github.com/rygorous/16796a0c876cf8a5f542caddb55bce8a
 // get missing functions from code/SDL2/include/SDL_opengl.h
 
-// OpenGL 1.0/1.1 and OpenGL ES 1.0
+// OpenGL 1.0/1.1, OpenGL ES 1.0, and OpenGL 3.2 core profile
 #define QGL_1_1_PROCS \
-	GLE(void, AlphaFunc, GLenum func, GLclampf ref) \
 	GLE(void, BindTexture, GLenum target, GLuint texture) \
 	GLE(void, BlendFunc, GLenum sfactor, GLenum dfactor) \
 	GLE(void, ClearColor, GLclampf red, GLclampf green, GLclampf blue, GLclampf alpha) \
 	GLE(void, Clear, GLbitfield mask) \
 	GLE(void, ClearStencil, GLint s) \
-	GLE(void, Color4f, GLfloat red, GLfloat green, GLfloat blue, GLfloat alpha) \
 	GLE(void, ColorMask, GLboolean red, GLboolean green, GLboolean blue, GLboolean alpha) \
-	GLE(void, ColorPointer, GLint size, GLenum type, GLsizei stride, const GLvoid *ptr) \
 	GLE(void, CopyTexSubImage2D, GLenum target, GLint level, GLint xoffset, GLint yoffset, GLint x, GLint y, GLsizei width, GLsizei height) \
 	GLE(void, CullFace, GLenum mode) \
 	GLE(void, DeleteTextures, GLsizei n, const GLuint *textures) \
 	GLE(void, DepthFunc, GLenum func) \
 	GLE(void, DepthMask, GLboolean flag) \
-	GLE(void, DisableClientState, GLenum cap) \
 	GLE(void, Disable, GLenum cap) \
 	GLE(void, DrawArrays, GLenum mode, GLint first, GLsizei count) \
 	GLE(void, DrawElements, GLenum mode, GLsizei count, GLenum type, const GLvoid *indices) \
-	GLE(void, EnableClientState, GLenum cap) \
 	GLE(void, Enable, GLenum cap) \
 	GLE(void, Finish, void) \
 	GLE(void, Flush, void) \
@@ -74,54 +85,69 @@ extern void (APIENTRYP qglUnlockArraysEXT) (void);
 	GLE(GLenum, GetError, void) \
 	GLE(void, GetIntegerv, GLenum pname, GLint *params) \
 	GLE(const GLubyte *, GetString, GLenum name) \
+	GLE(GLboolean, IsEnabled, GLenum cap) \
 	GLE(void, LineWidth, GLfloat width) \
-	GLE(void, LoadIdentity, void) \
-	GLE(void, LoadMatrixf, const GLfloat *m) \
-	GLE(void, MatrixMode, GLenum mode) \
 	GLE(void, PolygonOffset, GLfloat factor, GLfloat units) \
-	GLE(void, PopMatrix, void) \
-	GLE(void, PushMatrix, void) \
 	GLE(void, ReadPixels, GLint x, GLint y, GLsizei width, GLsizei height, GLenum format, GLenum type, GLvoid *pixels) \
 	GLE(void, Scissor, GLint x, GLint y, GLsizei width, GLsizei height) \
-	GLE(void, ShadeModel, GLenum mode) \
 	GLE(void, StencilFunc, GLenum func, GLint ref, GLuint mask) \
 	GLE(void, StencilMask, GLuint mask) \
 	GLE(void, StencilOp, GLenum fail, GLenum zfail, GLenum zpass) \
-	GLE(void, TexCoordPointer, GLint size, GLenum type, GLsizei stride, const GLvoid *ptr) \
-	GLE(void, TexEnvf, GLenum target, GLenum pname, GLfloat param) \
 	GLE(void, TexImage2D, GLenum target, GLint level, GLint internalFormat, GLsizei width, GLsizei height, GLint border, GLenum format, GLenum type, const GLvoid *pixels) \
 	GLE(void, TexParameterf, GLenum target, GLenum pname, GLfloat param) \
 	GLE(void, TexParameteri, GLenum target, GLenum pname, GLint param) \
 	GLE(void, TexSubImage2D, GLenum target, GLint level, GLint xoffset, GLint yoffset, GLsizei width, GLsizei height, GLenum format, GLenum type, const GLvoid *pixels) \
 	GLE(void, Translatef, GLfloat x, GLfloat y, GLfloat z) \
-	GLE(void, VertexPointer, GLint size, GLenum type, GLsizei stride, const GLvoid *ptr) \
 	GLE(void, Viewport, GLint x, GLint y, GLsizei width, GLsizei height) \
 
-// OpenGL 1.0/1.1 but not OpenGL ES 1.x
+// OpenGL 1.0/1.1 and OpenGL ES 1.x but not OpenGL 3.2 core profile
+#define QGL_1_1_FIXED_FUNCTION_PROCS \
+	GLE(void, AlphaFunc, GLenum func, GLclampf ref) \
+	GLE(void, Color4f, GLfloat red, GLfloat green, GLfloat blue, GLfloat alpha) \
+	GLE(void, ColorPointer, GLint size, GLenum type, GLsizei stride, const GLvoid *ptr) \
+	GLE(void, DisableClientState, GLenum cap) \
+	GLE(void, EnableClientState, GLenum cap) \
+	GLE(void, LoadIdentity, void) \
+	GLE(void, LoadMatrixf, const GLfloat *m) \
+	GLE(void, MatrixMode, GLenum mode) \
+	GLE(void, PopMatrix, void) \
+	GLE(void, PushMatrix, void) \
+	GLE(void, ShadeModel, GLenum mode) \
+	GLE(void, TexCoordPointer, GLint size, GLenum type, GLsizei stride, const GLvoid *ptr) \
+	GLE(void, TexEnvf, GLenum target, GLenum pname, GLfloat param) \
+	GLE(void, VertexPointer, GLint size, GLenum type, GLsizei stride, const GLvoid *ptr) \
+
+ // OpenGL 1.0/1.1 and 3.2 core profile but not OpenGL ES 1.x
 #define QGL_DESKTOP_1_1_PROCS \
+	GLE(void, ClearDepth, GLclampd depth) \
+	GLE(void, DepthRange, GLclampd near_val, GLclampd far_val) \
+	GLE(void, DrawBuffer, GLenum mode) \
+	GLE(void, PolygonMode, GLenum face, GLenum mode) \
+
+ // OpenGL 1.0/1.1 but not OpenGL 3.2 core profile or OpenGL ES 1.x
+#define QGL_DESKTOP_1_1_FIXED_FUNCTION_PROCS \
 	GLE(void, ArrayElement, GLint i) \
 	GLE(void, Begin, GLenum mode) \
-	GLE(void, ClearDepth, GLclampd depth) \
 	GLE(void, ClipPlane, GLenum plane, const GLdouble *equation) \
 	GLE(void, Color3f, GLfloat red, GLfloat green, GLfloat blue) \
 	GLE(void, Color4ubv, const GLubyte *v) \
-	GLE(void, DepthRange, GLclampd near_val, GLclampd far_val) \
-	GLE(void, DrawBuffer, GLenum mode) \
 	GLE(void, End, void) \
 	GLE(void, Frustum, GLdouble left, GLdouble right, GLdouble bottom, GLdouble top, GLdouble near_val, GLdouble far_val) \
 	GLE(void, Ortho, GLdouble left, GLdouble right, GLdouble bottom, GLdouble top, GLdouble near_val, GLdouble far_val) \
-	GLE(void, PolygonMode, GLenum face, GLenum mode) \
 	GLE(void, TexCoord2f, GLfloat s, GLfloat t) \
 	GLE(void, TexCoord2fv, const GLfloat *v) \
 	GLE(void, Vertex2f, GLfloat x, GLfloat y) \
 	GLE(void, Vertex3f, GLfloat x, GLfloat y, GLfloat z) \
 	GLE(void, Vertex3fv, const GLfloat *v) \
 
-// OpenGL ES 1.1 but not desktop OpenGL 1.x
+// OpenGL ES 1.1 and OpenGL ES 2.0 but not desktop OpenGL 1.x
 #define QGL_ES_1_1_PROCS \
 	GLE(void, ClearDepthf, GLclampf depth) \
-	GLE(void, ClipPlanef, GLenum plane, const GLfloat *equation) \
 	GLE(void, DepthRangef, GLclampf near_val, GLclampf far_val) \
+
+// OpenGL ES 1.1 but not OpenGL ES 2.0 or desktop OpenGL 1.x
+#define QGL_ES_1_1_FIXED_FUNCTION_PROCS \
+	GLE(void, ClipPlanef, GLenum plane, const GLfloat *equation) \
 	GLE(void, Frustumf, GLfloat left, GLfloat right, GLfloat bottom, GLfloat top, GLfloat near_val, GLfloat far_val) \
 	GLE(void, Orthof, GLfloat left, GLfloat right, GLfloat bottom, GLfloat top, GLfloat near_val, GLfloat far_val) \
 
@@ -131,14 +157,17 @@ extern void (APIENTRYP qglUnlockArraysEXT) (void);
 	GLE(void, CompressedTexImage2D, GLenum target, GLint level, GLenum internalformat, GLsizei width, GLsizei height, GLint border, GLsizei imageSize, const void *data) \
 	GLE(void, CompressedTexSubImage2D, GLenum target, GLint level, GLint xoffset, GLint yoffset, GLsizei width, GLsizei height, GLenum format, GLsizei imageSize, const void *data) \
 
-// OpenGL 1.5, was GL_ARB_vertex_buffer_object and GL_ARB_occlusion_query
-#define QGL_1_5_PROCS \
+// GL_ARB_occlusion_query, built-in to OpenGL 1.5 but not OpenGL ES 2.0
+#define QGL_ARB_occlusion_query_PROCS \
 	GLE(void, GenQueries, GLsizei n, GLuint *ids) \
 	GLE(void, DeleteQueries, GLsizei n, const GLuint *ids) \
 	GLE(void, BeginQuery, GLenum target, GLuint id) \
 	GLE(void, EndQuery, GLenum target) \
 	GLE(void, GetQueryObjectiv, GLuint id, GLenum pname, GLint *params) \
 	GLE(void, GetQueryObjectuiv, GLuint id, GLenum pname, GLuint *params) \
+
+// OpenGL 1.5, was GL_ARB_vertex_buffer_object
+#define QGL_1_5_PROCS \
 	GLE(void, BindBuffer, GLenum target, GLuint buffer) \
 	GLE(void, DeleteBuffers, GLsizei n, const GLuint *buffers) \
 	GLE(void, GenBuffers, GLsizei n, GLuint *buffers) \
@@ -301,14 +330,18 @@ extern void (APIENTRYP qglUnlockArraysEXT) (void);
 	GLE(GLvoid, NamedFramebufferTexture2DEXT, GLuint framebuffer, GLenum attachment, GLenum textarget, GLuint texture, GLint level) \
 	GLE(GLvoid, NamedFramebufferRenderbufferEXT, GLuint framebuffer, GLenum attachment, GLenum renderbuffertarget, GLuint renderbuffer) \
 
-#define GLE(ret, name, ...) typedef ret APIENTRY name##proc(__VA_ARGS__); extern name##proc * qgl##name;
+#define GLE(ret, name, ...) typedef ret APIENTRY name##proc(__VA_ARGS__);
 QGL_1_1_PROCS;
+QGL_1_1_FIXED_FUNCTION_PROCS;
 QGL_DESKTOP_1_1_PROCS;
+QGL_DESKTOP_1_1_FIXED_FUNCTION_PROCS;
 QGL_ES_1_1_PROCS;
+QGL_ES_1_1_FIXED_FUNCTION_PROCS;
 QGL_1_3_PROCS;
 QGL_1_5_PROCS;
 QGL_2_0_PROCS;
 QGL_3_0_PROCS;
+QGL_ARB_occlusion_query_PROCS;
 QGL_ARB_framebuffer_object_PROCS;
 QGL_ARB_vertex_array_object_PROCS;
 QGL_EXT_direct_state_access_PROCS;

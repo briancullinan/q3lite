@@ -1,22 +1,29 @@
 /*
 ===========================================================================
-Copyright (C) 1999-2005 Id Software, Inc.
+Copyright (C) 1999-2010 id Software LLC, a ZeniMax Media company.
 
-This file is part of Quake III Arena source code.
+This file is part of Q3lite Source Code.
 
-Quake III Arena source code is free software; you can redistribute it
+Q3lite Source Code is free software; you can redistribute it
 and/or modify it under the terms of the GNU General Public License as
-published by the Free Software Foundation; either version 2 of the License,
+published by the Free Software Foundation; either version 3 of the License,
 or (at your option) any later version.
 
-Quake III Arena source code is distributed in the hope that it will be
+Q3lite Source Code is distributed in the hope that it will be
 useful, but WITHOUT ANY WARRANTY; without even the implied warranty of
 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with Quake III Arena source code; if not, write to the Free Software
-Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+along with Q3lite Source Code.  If not, see <http://www.gnu.org/licenses/>.
+
+In addition, Q3lite Source Code is also subject to certain additional terms.
+You should have received a copy of these additional terms immediately following
+the terms and conditions of the GNU General Public License.  If not, please
+request a copy in writing from id Software at the address below.
+If you have questions concerning this license or the applicable additional
+terms, you may contact in writing id Software LLC, c/o ZeniMax Media Inc.,
+Suite 120, Rockville, Maryland 20850 USA.
 ===========================================================================
 */
 // qcommon.h -- definitions common between client and server, but not game.or ref modules
@@ -42,9 +49,10 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 typedef struct {
 	qboolean	allowoverflow;	// if false, do a Com_Error
 	qboolean	overflowed;		// set to true if the buffer size failed (with allowoverflow set)
-	qboolean	oob;			// set to true if the buffer size failed (with allowoverflow set)
+	qboolean	oob;			// raw out-of-band operation, no static huffman encoding/decoding
 	byte	*data;
 	int		maxsize;
+	int		maxbits;			// maxsize in bits, for overflow checks
 	int		cursize;
 	int		readcount;
 	int		bit;				// for bitwise reads and writes
@@ -188,8 +196,11 @@ void		NET_LeaveMulticast6(void);
 void		NET_Sleep(int msec);
 
 
-#define	MAX_MSGLEN				16384		// max length of a message, which may
-											// be fragmented into multiple packets
+#define	MAX_MSGLEN		16384	// max length of a message, which may
+								// be fragmented into multiple packets
+
+#define	MAX_MSGLEN_BUF	(MAX_MSGLEN+8)	// real buffer size that we need to allocate
+										// to safely handle overflows
 
 #define MAX_DOWNLOAD_WINDOW		48	// ACK window of 48 download chunks. Cannot set this higher, or clients
 						// will overflow the reliable commands buffer
@@ -226,12 +237,15 @@ typedef struct {
 	byte		unsentBuffer[MAX_MSGLEN];
 
 	int			challenge;
-	int		lastSentTime;
-	int		lastSentSize;
+	int			lastSentTime;
+	int			lastSentSize;
 
 #ifdef LEGACY_PROTOCOL
 	qboolean	compat;
 #endif
+
+	qboolean	isLANAddress;
+	
 } netchan_t;
 
 void Netchan_Init( int qport );
@@ -787,8 +801,7 @@ typedef enum
   CF_3DNOW      = 1 << 3,
   CF_3DNOW_EXT  = 1 << 4,
   CF_SSE        = 1 << 5,
-  CF_SSE2       = 1 << 6,
-  CF_ALTIVEC    = 1 << 7
+  CF_SSE2       = 1 << 6
 } cpuFeatures_t;
 
 // centralized and cleaned, that's the max string you can send to a Com_Printf / Com_DPrintf (above gets truncated)
@@ -865,7 +878,6 @@ extern	cvar_t	*com_unfocused;
 extern	cvar_t	*com_maxfpsUnfocused;
 extern	cvar_t	*com_minimized;
 extern	cvar_t	*com_maxfpsMinimized;
-extern	cvar_t	*com_altivec;
 extern	cvar_t	*com_standalone;
 extern	cvar_t	*com_basegame;
 extern	cvar_t	*com_homepath;
@@ -1164,64 +1176,20 @@ dialogResult_t Sys_Dialog( dialogType_t type, const char *message, const char *t
 void Sys_RemovePIDFile( const char *gamedir );
 void Sys_InitPIDFile( const char *gamedir );
 
-/* This is based on the Adaptive Huffman algorithm described in Sayood's Data
- * Compression book.  The ranks are not actually stored, but implicitly defined
- * by the location of a node within a doubly-linked list */
+// adaptive huffman functions
+void	Huff_Compress( msg_t *buf, int offset );
+void	Huff_Decompress( msg_t *buf, int offset );
 
-#define NYT HMAX					/* NYT = Not Yet Transmitted */
-#define INTERNAL_NODE (HMAX+1)
-
-typedef struct nodetype {
-	struct	nodetype *left, *right, *parent; /* tree structure */ 
-	struct	nodetype *next, *prev; /* doubly-linked list */
-	struct	nodetype **head; /* highest ranked node in block */
-	int		weight;
-	int		symbol;
-} node_t;
-
-#define HMAX 256 /* Maximum symbol */
-
-typedef struct {
-	int			blocNode;
-	int			blocPtrs;
-
-	node_t*		tree;
-	node_t*		lhead;
-	node_t*		ltail;
-	node_t*		loc[HMAX+1];
-	node_t**	freelist;
-
-	node_t		nodeList[768];
-	node_t*		nodePtrs[768];
-} huff_t;
-
-typedef struct {
-	huff_t		compressor;
-	huff_t		decompressor;
-} huffman_t;
-
-void	Huff_Compress(msg_t *buf, int offset);
-void	Huff_Decompress(msg_t *buf, int offset);
-void	Huff_Init(huffman_t *huff);
-void	Huff_addRef(huff_t* huff, byte ch);
-int		Huff_Receive (node_t *node, int *ch, byte *fin);
-void	Huff_transmit (huff_t *huff, int ch, byte *fout, int maxoffset);
-void	Huff_offsetReceive (node_t *node, int *ch, byte *fin, int *offset, int maxoffset);
-void	Huff_offsetTransmit (huff_t *huff, int ch, byte *fout, int *offset, int maxoffset);
-void	Huff_putBit( int bit, byte *fout, int *offset);
-int		Huff_getBit( byte *fout, int *offset);
-
-// don't use if you don't know what you're doing.
-int		Huff_getBloc(void);
-void	Huff_setBloc(int _bloc);
-
-
-extern huffman_t clientHuffTables;
+// static huffman functions
+void HuffmanPutBit( byte* fout, int32_t bitIndex, int bit );
+int HuffmanPutSymbol( byte* fout, uint32_t offset, int symbol );
+int HuffmanGetBit( const byte* buffer, int bitIndex );
+int HuffmanGetSymbol( int* symbol, const byte* buffer, int bitIndex );
 
 #define	SV_ENCODE_START		4
-#define SV_DECODE_START		12
+#define	SV_DECODE_START		12
 #define	CL_ENCODE_START		12
-#define CL_DECODE_START		4
+#define	CL_DECODE_START		4
 
 // flags for sv_allowDownload and cl_allowDownload
 #define DLF_ENABLE 1

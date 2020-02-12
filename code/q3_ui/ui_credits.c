@@ -1,22 +1,29 @@
 /*
 ===========================================================================
-Copyright (C) 1999-2005 Id Software, Inc.
+Copyright (C) 1999-2010 id Software LLC, a ZeniMax Media company.
 
-This file is part of Quake III Arena source code.
+This file is part of Q3lite Source Code.
 
-Quake III Arena source code is free software; you can redistribute it
+Q3lite Source Code is free software; you can redistribute it
 and/or modify it under the terms of the GNU General Public License as
-published by the Free Software Foundation; either version 2 of the License,
+published by the Free Software Foundation; either version 3 of the License,
 or (at your option) any later version.
 
-Quake III Arena source code is distributed in the hope that it will be
+Q3lite Source Code is distributed in the hope that it will be
 useful, but WITHOUT ANY WARRANTY; without even the implied warranty of
 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with Quake III Arena source code; if not, write to the Free Software
-Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+along with Q3lite Source Code.  If not, see <http://www.gnu.org/licenses/>.
+
+In addition, Q3lite Source Code is also subject to certain additional terms.
+You should have received a copy of these additional terms immediately following
+the terms and conditions of the GNU General Public License.  If not, please
+request a copy in writing from id Software at the address below.
+If you have questions concerning this license or the applicable additional
+terms, you may contact in writing id Software LLC, c/o ZeniMax Media Inc.,
+Suite 120, Rockville, Maryland 20850 USA.
 ===========================================================================
 */
 //
@@ -85,6 +92,48 @@ static void UI_CreditMenu_Draw_ioq3( void ) {
 
 
 /*
+===============
+UI_CreditMenu_Draw_q3lite
+===============
+*/
+static void UI_CreditMenu_Draw_q3lite( void ) {
+	int		y;
+	int		i;
+
+	static const char *lines[] = {
+		" ",
+		"Quake III Arena",
+		"for embedded systems",
+		" ",
+		"Source code:",
+		"https://github.com/cdev-tux/q3lite",
+		" ",
+		"Documentation:",
+		"https://github.com/cdev-tux/q3lite/wiki",
+		" ",
+		"Maintainer:",
+		"cdev-tux",
+		" ",
+		"Thank you contributors!",
+		NULL
+	};
+
+	UI_DrawHandlePic( 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, uis.menuBackShader );
+
+	// Center text vertically on the screen
+	y = (SCREEN_HEIGHT - ARRAY_LEN(lines) * (1.42 * PROP_HEIGHT * PROP_SMALL_SIZE_SCALE)) / 2;
+
+	UI_DrawProportionalString( 320, y, "Q3lite", UI_CENTER|UI_BIGFONT, color_red );
+	y += 1.42 * PROP_HEIGHT * PROP_SMALL_SIZE_SCALE;
+
+	for (i = 0; lines[i]; i++) {
+		UI_DrawProportionalString( 320, y, lines[i], UI_CENTER|UI_SMALLFONT|UI_DROPSHADOW, color_white );
+		y += 1.42 * PROP_HEIGHT * PROP_SMALL_SIZE_SCALE;
+	}
+}
+
+
+/*
 =================
 UI_CreditMenu_Key
 =================
@@ -97,8 +146,12 @@ static sfxHandle_t UI_CreditMenu_Key( int key ) {
 	s_credits.frame++;
 	if (s_credits.frame == 1) {
 		s_credits.menu.draw = UI_CreditMenu_Draw_ioq3;
-	} else {
-		trap_Cmd_ExecuteText( EXEC_APPEND, "quit\n" );
+	}
+	if (s_credits.frame == 2) {
+		s_credits.menu.draw = UI_CreditMenu_Draw_q3lite;
+	}
+	if (s_credits.frame > 2) {
+	trap_Cmd_ExecuteText( EXEC_APPEND, "quit\n" );
 	}
 	return 0;
 }

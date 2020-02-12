@@ -1,32 +1,37 @@
 /*
 ===========================================================================
-Copyright (C) 1999-2005 Id Software, Inc.
+Copyright (C) 1999-2010 id Software LLC, a ZeniMax Media company.
 
-This file is part of Quake III Arena source code.
+This file is part of Q3lite Source Code.
 
-Quake III Arena source code is free software; you can redistribute it
+Q3lite Source Code is free software; you can redistribute it
 and/or modify it under the terms of the GNU General Public License as
-published by the Free Software Foundation; either version 2 of the License,
+published by the Free Software Foundation; either version 3 of the License,
 or (at your option) any later version.
 
-Quake III Arena source code is distributed in the hope that it will be
+Q3lite Source Code is distributed in the hope that it will be
 useful, but WITHOUT ANY WARRANTY; without even the implied warranty of
 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with Quake III Arena source code; if not, write to the Free Software
-Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+along with Q3lite Source Code.  If not, see <http://www.gnu.org/licenses/>.
+
+In addition, Q3lite Source Code is also subject to certain additional terms.
+You should have received a copy of these additional terms immediately following
+the terms and conditions of the GNU General Public License.  If not, please
+request a copy in writing from id Software at the address below.
+If you have questions concerning this license or the applicable additional
+terms, you may contact in writing id Software LLC, c/o ZeniMax Media Inc.,
+Suite 120, Rockville, Maryland 20850 USA.
 ===========================================================================
 */
 #include "q_shared.h"
 #include "qcommon.h"
 
-static huffman_t		msgHuff;
-
-static qboolean			msgInit = qfalse;
-
 int pcount[256];
+
+
 
 /*
 ==============================================================================
@@ -36,27 +41,18 @@ int pcount[256];
 Handles byte ordering and avoids alignment errors
 ==============================================================================
 */
-
-int oldsize = 0;
-
-void MSG_initHuffman( void );
-
 void MSG_Init( msg_t *buf, byte *data, int length ) {
-	if (!msgInit) {
-		MSG_initHuffman();
-	}
 	Com_Memset (buf, 0, sizeof(*buf));
 	buf->data = data;
 	buf->maxsize = length;
+	buf->maxbits = length * 8;
 }
 
 void MSG_InitOOB( msg_t *buf, byte *data, int length ) {
-	if (!msgInit) {
-		MSG_initHuffman();
-	}
 	Com_Memset (buf, 0, sizeof(*buf));
 	buf->data = data;
 	buf->maxsize = length;
+	buf->maxbits = length * 8;
 	buf->oob = qtrue;
 }
 
@@ -105,8 +101,6 @@ bit functions
 void MSG_WriteBits( msg_t *msg, int value, int bits ) {
 	int	i;
 
-	oldsize += bits;
-
 	if ( msg->overflowed ) {
 		return;
 	}
@@ -114,6 +108,9 @@ void MSG_WriteBits( msg_t *msg, int value, int bits ) {
 	if ( bits == 0 || bits < -31 || bits > 32 ) {
 		Com_Error( ERR_DROP, "MSG_WriteBits: bad bits %i", bits );
 	}
+
+	if ( msg->overflowed != qfalse )
+		return;
 
 	if ( bits < 0 ) {
 		bits = -bits;
@@ -144,22 +141,23 @@ void MSG_WriteBits( msg_t *msg, int value, int bits ) {
 		}
 	} else {
 		value &= (0xffffffff >> (32 - bits));
-		if ( bits&7 ) {
+		if ( bits & 7 ) {
 			int nbits;
 			nbits = bits&7;
 			if ( msg->bit + nbits > msg->maxsize << 3 ) {
 				msg->overflowed = qtrue;
 				return;
 			}
-			for( i = 0; i < nbits; i++ ) {
-				Huff_putBit( (value & 1), msg->data, &msg->bit );
+			for ( i = 0; i < nbits ; i++ ) {
+				HuffmanPutBit( msg->data, msg->bit, (value & 1) );
+				msg->bit++;
 				value = (value >> 1);
 			}
 			bits = bits - nbits;
 		}
 		if ( bits ) {
-			for( i = 0; i < bits; i += 8 ) {
-				Huff_offsetTransmit( &msgHuff.compressor, (value & 0xff), msg->data, &msg->bit, msg->maxsize << 3 );
+			for( i = 0 ; i < bits ; i += 8 ) {
+				msg->bit += HuffmanPutSymbol( msg->data, msg->bit, (value & 0xFF) );
 				value = (value >> 8);
 
 				if ( msg->bit > msg->maxsize << 3 ) {
@@ -170,18 +168,26 @@ void MSG_WriteBits( msg_t *msg, int value, int bits ) {
 		}
 		msg->cursize = (msg->bit >> 3) + 1;
 	}
+
+	if ( msg->bit > msg->maxbits ) {
+		msg->overflowed = qtrue;
+	}
 }
+
 
 int MSG_ReadBits( msg_t *msg, int bits ) {
 	int			value;
-	int			get;
 	qboolean	sgn;
-	int			i, nbits;
-//	FILE*	fp;
+	int			i;
+	int			sym;
+	const byte *buffer = msg->data; // dereference optimization
 
 	if ( msg->readcount > msg->cursize ) {
 		return 0;
 	}
+
+	if ( msg->bit >= msg->maxbits )
+		return 0;
 
 	value = 0;
 
@@ -192,63 +198,55 @@ int MSG_ReadBits( msg_t *msg, int bits ) {
 		sgn = qfalse;
 	}
 
-	if (msg->oob) {
+	if ( msg->oob ) {
 		if (msg->readcount + (bits>>3) > msg->cursize) {
 			msg->readcount = msg->cursize + 1;
 			return 0;
 		}
 
-		if(bits==8)
+		if( bits == 8 )
 		{
-			value = msg->data[msg->readcount];
+			value = *(buffer + msg->readcount);
 			msg->readcount += 1;
 			msg->bit += 8;
 		}
-		else if(bits==16)
+		else if( bits == 16 )
 		{
 			short temp;
-			
-			CopyLittleShort(&temp, &msg->data[msg->readcount]);
+			CopyLittleShort( &temp, buffer + msg->readcount );
 			value = temp;
 			msg->readcount += 2;
 			msg->bit += 16;
 		}
-		else if(bits==32)
+		else if( bits == 32 )
 		{
-			CopyLittleLong(&value, &msg->data[msg->readcount]);
+			CopyLittleLong( &value, buffer + msg->readcount );
 			msg->readcount += 4;
 			msg->bit += 32;
 		}
 		else
-			Com_Error(ERR_DROP, "can't read %d bits", bits);
+			Com_Error( ERR_DROP, "can't read %d bits", bits );
 	} else {
-		nbits = 0;
-		if (bits&7) {
-			nbits = bits&7;
-			if (msg->bit + nbits > msg->cursize << 3) {
-				msg->readcount = msg->cursize + 1;
-				return 0;
+		const int nbits = bits & 7;
+		int bitIndex = msg->bit; // dereference optimizaton
+		if ( nbits )
+		{		
+			for ( i = 0; i < nbits; i++ ) {
+				value |= HuffmanGetBit( buffer, bitIndex ) << i;
+				bitIndex++;
 			}
-			for(i=0;i<nbits;i++) {
-				value |= (Huff_getBit(msg->data, &msg->bit)<<i);
-			}
-			bits = bits - nbits;
+			bits -= nbits;
 		}
-		if (bits) {
-//			fp = fopen("c:\\netchan.bin", "a");
-			for(i=0;i<bits;i+=8) {
-				Huff_offsetReceive (msgHuff.decompressor.tree, &get, msg->data, &msg->bit, msg->cursize<<3);
-//				fwrite(&get, 1, 1, fp);
-				value |= (get<<(i+nbits));
-
-				if (msg->bit > msg->cursize<<3) {
-					msg->readcount = msg->cursize + 1;
-					return 0;
-				}
+		if ( bits )
+		{
+			for ( i = 0; i < bits; i += 8 )
+			{
+				bitIndex += HuffmanGetSymbol( &sym, buffer, bitIndex );
+				value = ( unsigned int )value | ( ( unsigned int )sym << ( i+nbits ) );
 			}
-//			fclose(fp);
 		}
-		msg->readcount = (msg->bit>>3)+1;
+		msg->bit = bitIndex;
+		msg->readcount = (bitIndex >> 3) + 1;
 	}
 	if ( sgn && bits > 0 && bits < 32 ) {
 		if ( value & ( 1 << ( bits - 1 ) ) ) {
@@ -400,17 +398,6 @@ int MSG_ReadByte( msg_t *msg ) {
 	return c;
 }
 
-int MSG_LookaheadByte( msg_t *msg ) {
-	const int bloc = Huff_getBloc();
-	const int readcount = msg->readcount;
-	const int bit = msg->bit;
-	int c = MSG_ReadByte(msg);
-	Huff_setBloc(bloc);
-	msg->readcount = readcount;
-	msg->bit = bit;
-	return c;
-}
-
 int MSG_ReadShort( msg_t *msg ) {
 	int	c;
 	
@@ -462,12 +449,14 @@ char *MSG_ReadString( msg_t *msg ) {
 		if ( c > 127 ) {
 			c = '.';
 		}
-
-		string[l] = c;
-		l++;
-	} while (l < sizeof(string)-1);
+		// break only after reading all expected data from bitstream
+		if ( l >= sizeof(string)-1 ) {
+			break;
+		}
+		string[l++] = c;
+	} while (1);
 	
-	string[l] = 0;
+	string[l] = '\0';
 	
 	return string;
 }
@@ -490,12 +479,14 @@ char *MSG_ReadBigString( msg_t *msg ) {
 		if ( c > 127 ) {
 			c = '.';
 		}
-
-		string[l] = c;
-		l++;
-	} while (l < sizeof(string)-1);
+		// break only after reading all expected data from bitstream
+		if ( l >= sizeof(string)-1 ) {
+			break;
+		}
+		string[l++] = c;
+	} while (1);
 	
-	string[l] = 0;
+	string[l] = '\0';
 	
 	return string;
 }
@@ -518,12 +509,14 @@ char *MSG_ReadStringLine( msg_t *msg ) {
 		if ( c > 127 ) {
 			c = '.';
 		}
-
-		string[l] = c;
-		l++;
-	} while (l < sizeof(string)-1);
+		// break only after reading all expected data from bitstream
+		if ( l >= sizeof(string)-1 ) {
+			break;
+		}
+		string[l++] = c;
+	} while (1);
 	
-	string[l] = 0;
+	string[l] = '\0';
 	
 	return string;
 }
@@ -556,54 +549,9 @@ int MSG_HashKey(const char *string, int maxlen) {
 	return hash;
 }
 
-/*
-=============================================================================
-
-delta functions
-  
-=============================================================================
-*/
-
 extern cvar_t *cl_shownet;
 
 #define	LOG(x) if( cl_shownet && cl_shownet->integer == 4 ) { Com_Printf("%s ", x ); };
-
-void MSG_WriteDelta( msg_t *msg, int oldV, int newV, int bits ) {
-	if ( oldV == newV ) {
-		MSG_WriteBits( msg, 0, 1 );
-		return;
-	}
-	MSG_WriteBits( msg, 1, 1 );
-	MSG_WriteBits( msg, newV, bits );
-}
-
-int	MSG_ReadDelta( msg_t *msg, int oldV, int bits ) {
-	if ( MSG_ReadBits( msg, 1 ) ) {
-		return MSG_ReadBits( msg, bits );
-	}
-	return oldV;
-}
-
-void MSG_WriteDeltaFloat( msg_t *msg, float oldV, float newV ) {
-	floatint_t fi;
-	if ( oldV == newV ) {
-		MSG_WriteBits( msg, 0, 1 );
-		return;
-	}
-	fi.f = newV;
-	MSG_WriteBits( msg, 1, 1 );
-	MSG_WriteBits( msg, fi.i, 32 );
-}
-
-float MSG_ReadDeltaFloat( msg_t *msg, float oldV ) {
-	if ( MSG_ReadBits( msg, 1 ) ) {
-		floatint_t fi;
-
-		fi.i = MSG_ReadBits( msg, 32 );
-		return fi.f;
-	}
-	return oldV;
-}
 
 /*
 =============================================================================
@@ -692,7 +640,6 @@ void MSG_WriteDeltaUsercmdKey( msg_t *msg, int key, usercmd_t *from, usercmd_t *
 		from->buttons == to->buttons &&
 		from->weapon == to->weapon) {
 			MSG_WriteBits( msg, 0, 1 );				// no change
-			oldsize += 7;
 			return;
 	}
 	key ^= to->serverTime;
@@ -772,15 +719,15 @@ void MSG_ReportChangeVectors_f( void ) {
 }
 
 typedef struct {
-	char	*name;
-	int		offset;
-	int		bits;		// 0 = float
+	const char	*name;
+	const int	offset;
+	const int	bits;	// 0 = float
 } netField_t;
 
 // using the stringizing operator to save typing...
 #define	NETF(x) #x,(size_t)&((entityState_t*)0)->x
 
-netField_t	entityStateFields[] = 
+const netField_t entityStateFields[] =
 {
 { NETF(pos.trTime), 32 },
 { NETF(pos.trBase[0]), 0 },
@@ -856,10 +803,10 @@ void MSG_WriteDeltaEntity( msg_t *msg, struct entityState_s *from, struct entity
 						   qboolean force ) {
 	int			i, lc;
 	int			numFields;
-	netField_t	*field;
+	const netField_t *field;
 	int			trunc;
 	float		fullFloat;
-	int			*fromF, *toF;
+	const int	*fromF, *toF;
 
 	numFields = ARRAY_LEN( entityStateFields );
 
@@ -911,8 +858,6 @@ void MSG_WriteDeltaEntity( msg_t *msg, struct entityState_s *from, struct entity
 
 	MSG_WriteByte( msg, lc );	// # of changes
 
-	oldsize += numFields;
-
 	for ( i = 0, field = entityStateFields ; i < lc ; i++, field++ ) {
 		fromF = (int *)( (byte *)from + field->offset );
 		toF = (int *)( (byte *)to + field->offset );
@@ -930,8 +875,7 @@ void MSG_WriteDeltaEntity( msg_t *msg, struct entityState_s *from, struct entity
 			trunc = (int)fullFloat;
 
 			if (fullFloat == 0.0f) {
-					MSG_WriteBits( msg, 0, 1 );
-					oldsize += FLOAT_INT_BITS;
+				MSG_WriteBits( msg, 0, 1 );
 			} else {
 				MSG_WriteBits( msg, 1, 1 );
 				if ( trunc == fullFloat && trunc + FLOAT_INT_BIAS >= 0 && 
@@ -973,13 +917,14 @@ void MSG_ReadDeltaEntity( msg_t *msg, entityState_t *from, entityState_t *to,
 						 int number) {
 	int			i, lc;
 	int			numFields;
-	netField_t	*field;
-	int			*fromF, *toF;
+	const netField_t *field;
+	const int	*fromF;
+	int			*toF;
 	int			print;
 	int			trunc;
 	int			startBit, endBit;
 
-	if ( number < 0 || number >= MAX_GENTITIES) {
+	if ( number < 0 || number >= MAX_GENTITIES ) {
 		Com_Error( ERR_DROP, "Bad delta entity number: %i", number );
 	}
 
@@ -1164,7 +1109,7 @@ void MSG_WriteDeltaPlayerstate( msg_t *msg, struct playerState_s *from, struct p
 	int				powerupbits;
 	int				numFields;
 	netField_t		*field;
-	int				*fromF, *toF;
+	const int		*fromF, *toF;
 	float			fullFloat;
 	int				trunc, lc;
 
@@ -1185,8 +1130,6 @@ void MSG_WriteDeltaPlayerstate( msg_t *msg, struct playerState_s *from, struct p
 	}
 
 	MSG_WriteByte( msg, lc );	// # of changes
-
-	oldsize += numFields - lc;
 
 	for ( i = 0, field = playerStateFields ; i < lc ; i++, field++ ) {
 		fromF = (int *)( (byte *)from + field->offset );
@@ -1252,7 +1195,6 @@ void MSG_WriteDeltaPlayerstate( msg_t *msg, struct playerState_s *from, struct p
 
 	if (!statsbits && !persistantbits && !ammobits && !powerupbits) {
 		MSG_WriteBits( msg, 0, 1 );	// no change
-		oldsize += 4;
 		return;
 	}
 	MSG_WriteBits( msg, 1, 1 );	// changed
@@ -1314,7 +1256,8 @@ void MSG_ReadDeltaPlayerstate (msg_t *msg, playerState_t *from, playerState_t *t
 	int			numFields;
 	int			startBit, endBit;
 	int			print;
-	int			*fromF, *toF;
+	const int	*fromF;
+	int			*toF;
 	int			trunc;
 	playerState_t	dummy;
 
@@ -1446,311 +1389,5 @@ void MSG_ReadDeltaPlayerstate (msg_t *msg, playerState_t *from, playerState_t *t
 	}
 }
 
-int msg_hData[256] = {
-250315,			// 0
-41193,			// 1
-6292,			// 2
-7106,			// 3
-3730,			// 4
-3750,			// 5
-6110,			// 6
-23283,			// 7
-33317,			// 8
-6950,			// 9
-7838,			// 10
-9714,			// 11
-9257,			// 12
-17259,			// 13
-3949,			// 14
-1778,			// 15
-8288,			// 16
-1604,			// 17
-1590,			// 18
-1663,			// 19
-1100,			// 20
-1213,			// 21
-1238,			// 22
-1134,			// 23
-1749,			// 24
-1059,			// 25
-1246,			// 26
-1149,			// 27
-1273,			// 28
-4486,			// 29
-2805,			// 30
-3472,			// 31
-21819,			// 32
-1159,			// 33
-1670,			// 34
-1066,			// 35
-1043,			// 36
-1012,			// 37
-1053,			// 38
-1070,			// 39
-1726,			// 40
-888,			// 41
-1180,			// 42
-850,			// 43
-960,			// 44
-780,			// 45
-1752,			// 46
-3296,			// 47
-10630,			// 48
-4514,			// 49
-5881,			// 50
-2685,			// 51
-4650,			// 52
-3837,			// 53
-2093,			// 54
-1867,			// 55
-2584,			// 56
-1949,			// 57
-1972,			// 58
-940,			// 59
-1134,			// 60
-1788,			// 61
-1670,			// 62
-1206,			// 63
-5719,			// 64
-6128,			// 65
-7222,			// 66
-6654,			// 67
-3710,			// 68
-3795,			// 69
-1492,			// 70
-1524,			// 71
-2215,			// 72
-1140,			// 73
-1355,			// 74
-971,			// 75
-2180,			// 76
-1248,			// 77
-1328,			// 78
-1195,			// 79
-1770,			// 80
-1078,			// 81
-1264,			// 82
-1266,			// 83
-1168,			// 84
-965,			// 85
-1155,			// 86
-1186,			// 87
-1347,			// 88
-1228,			// 89
-1529,			// 90
-1600,			// 91
-2617,			// 92
-2048,			// 93
-2546,			// 94
-3275,			// 95
-2410,			// 96
-3585,			// 97
-2504,			// 98
-2800,			// 99
-2675,			// 100
-6146,			// 101
-3663,			// 102
-2840,			// 103
-14253,			// 104
-3164,			// 105
-2221,			// 106
-1687,			// 107
-3208,			// 108
-2739,			// 109
-3512,			// 110
-4796,			// 111
-4091,			// 112
-3515,			// 113
-5288,			// 114
-4016,			// 115
-7937,			// 116
-6031,			// 117
-5360,			// 118
-3924,			// 119
-4892,			// 120
-3743,			// 121
-4566,			// 122
-4807,			// 123
-5852,			// 124
-6400,			// 125
-6225,			// 126
-8291,			// 127
-23243,			// 128
-7838,			// 129
-7073,			// 130
-8935,			// 131
-5437,			// 132
-4483,			// 133
-3641,			// 134
-5256,			// 135
-5312,			// 136
-5328,			// 137
-5370,			// 138
-3492,			// 139
-2458,			// 140
-1694,			// 141
-1821,			// 142
-2121,			// 143
-1916,			// 144
-1149,			// 145
-1516,			// 146
-1367,			// 147
-1236,			// 148
-1029,			// 149
-1258,			// 150
-1104,			// 151
-1245,			// 152
-1006,			// 153
-1149,			// 154
-1025,			// 155
-1241,			// 156
-952,			// 157
-1287,			// 158
-997,			// 159
-1713,			// 160
-1009,			// 161
-1187,			// 162
-879,			// 163
-1099,			// 164
-929,			// 165
-1078,			// 166
-951,			// 167
-1656,			// 168
-930,			// 169
-1153,			// 170
-1030,			// 171
-1262,			// 172
-1062,			// 173
-1214,			// 174
-1060,			// 175
-1621,			// 176
-930,			// 177
-1106,			// 178
-912,			// 179
-1034,			// 180
-892,			// 181
-1158,			// 182
-990,			// 183
-1175,			// 184
-850,			// 185
-1121,			// 186
-903,			// 187
-1087,			// 188
-920,			// 189
-1144,			// 190
-1056,			// 191
-3462,			// 192
-2240,			// 193
-4397,			// 194
-12136,			// 195
-7758,			// 196
-1345,			// 197
-1307,			// 198
-3278,			// 199
-1950,			// 200
-886,			// 201
-1023,			// 202
-1112,			// 203
-1077,			// 204
-1042,			// 205
-1061,			// 206
-1071,			// 207
-1484,			// 208
-1001,			// 209
-1096,			// 210
-915,			// 211
-1052,			// 212
-995,			// 213
-1070,			// 214
-876,			// 215
-1111,			// 216
-851,			// 217
-1059,			// 218
-805,			// 219
-1112,			// 220
-923,			// 221
-1103,			// 222
-817,			// 223
-1899,			// 224
-1872,			// 225
-976,			// 226
-841,			// 227
-1127,			// 228
-956,			// 229
-1159,			// 230
-950,			// 231
-7791,			// 232
-954,			// 233
-1289,			// 234
-933,			// 235
-1127,			// 236
-3207,			// 237
-1020,			// 238
-927,			// 239
-1355,			// 240
-768,			// 241
-1040,			// 242
-745,			// 243
-952,			// 244
-805,			// 245
-1073,			// 246
-740,			// 247
-1013,			// 248
-805,			// 249
-1008,			// 250
-796,			// 251
-996,			// 252
-1057,			// 253
-11457,			// 254
-13504,			// 255
-};
-
-void MSG_initHuffman( void ) {
-	int i,j;
-
-	msgInit = qtrue;
-	Huff_Init(&msgHuff);
-	for(i=0;i<256;i++) {
-		for (j=0;j<msg_hData[i];j++) {
-			Huff_addRef(&msgHuff.compressor,	(byte)i);			// Do update
-			Huff_addRef(&msgHuff.decompressor,	(byte)i);			// Do update
-		}
-	}
-}
-
-/*
-void MSG_NUinitHuffman() {
-	byte	*data;
-	int		size, i, ch;
-	int		array[256];
-
-	msgInit = qtrue;
-
-	Huff_Init(&msgHuff);
-	// load it in
-	size = FS_ReadFile( "netchan/netchan.bin", (void **)&data );
-
-	for(i=0;i<256;i++) {
-		array[i] = 0;
-	}
-	for(i=0;i<size;i++) {
-		ch = data[i];
-		Huff_addRef(&msgHuff.compressor,	ch);			// Do update
-		Huff_addRef(&msgHuff.decompressor,	ch);			// Do update
-		array[ch]++;
-	}
-	Com_Printf("msg_hData {\n");
-	for(i=0;i<256;i++) {
-		if (array[i] == 0) {
-			Huff_addRef(&msgHuff.compressor,	i);			// Do update
-			Huff_addRef(&msgHuff.decompressor,	i);			// Do update
-		}
-		Com_Printf("%d,			// %d\n", array[i], i);
-	}
-	Com_Printf("};\n");
-	FS_FreeFile( data );
-	Cbuf_AddText( "condump dump.txt\n" );
-}
-*/
 
 //===========================================================================
