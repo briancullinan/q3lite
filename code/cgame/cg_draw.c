@@ -1,22 +1,29 @@
 /*
 ===========================================================================
-Copyright (C) 1999-2005 Id Software, Inc.
+Copyright (C) 1999-2010 id Software LLC, a ZeniMax Media company.
 
-This file is part of Quake III Arena source code.
+This file is part of Q3lite Source Code.
 
-Quake III Arena source code is free software; you can redistribute it
+Q3lite Source Code is free software; you can redistribute it
 and/or modify it under the terms of the GNU General Public License as
-published by the Free Software Foundation; either version 2 of the License,
+published by the Free Software Foundation; either version 3 of the License,
 or (at your option) any later version.
 
-Quake III Arena source code is distributed in the hope that it will be
+Q3lite Source Code is distributed in the hope that it will be
 useful, but WITHOUT ANY WARRANTY; without even the implied warranty of
 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with Quake III Arena source code; if not, write to the Free Software
-Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+along with Q3lite Source Code.  If not, see <http://www.gnu.org/licenses/>.
+
+In addition, Q3lite Source Code is also subject to certain additional terms.
+You should have received a copy of these additional terms immediately following
+the terms and conditions of the GNU General Public License.  If not, please
+request a copy in writing from id Software at the address below.
+If you have questions concerning this license or the applicable additional
+terms, you may contact in writing id Software LLC, c/o ZeniMax Media Inc.,
+Suite 120, Rockville, Maryland 20850 USA.
 ===========================================================================
 */
 //
@@ -794,6 +801,31 @@ static float CG_DrawTimer( float y ) {
 	return y + BIGCHAR_HEIGHT + 4;
 }
 
+/*
+==================
+CG_DrawSpeedometer
+==================
+*/
+
+static float CG_DrawSpeedometer( float y ) {
+	char	*s;
+	float	speed;
+	vec3_t	velocity;
+	int	w;
+
+	if (!cg_drawSpeedometer.integer || !cg.snap) {
+		return y;
+	}
+
+	VectorCopy(cg.predictedPlayerState.velocity, velocity);
+	speed = sqrt(velocity[0] * velocity[0] + velocity[1] * velocity[1]);
+	s = va( "%iups", ((int)speed));
+	w = CG_DrawStrlen( s ) * BIGCHAR_WIDTH;
+	CG_DrawBigString( 635 - w, y + 2, s, 1.0F);
+
+	return y + BIGCHAR_HEIGHT + 4;
+
+}
 
 /*
 =================
@@ -992,6 +1024,9 @@ static void CG_DrawUpperRight(stereoFrame_t stereoFrame)
 	}
 	if ( cg_drawTimer.integer ) {
 		y = CG_DrawTimer( y );
+	}
+	if ( cg_drawSpeedometer.integer ) {
+		y = CG_DrawSpeedometer( y );
 	}
 	if ( cg_drawAttacker.integer ) {
 		CG_DrawAttacker( y );
@@ -2107,7 +2142,9 @@ static void CG_DrawVote(void) {
 	// play a talk beep whenever it is modified
 	if ( cgs.voteModified ) {
 		cgs.voteModified = qfalse;
-		trap_S_StartLocalSound( cgs.media.talkSound, CHAN_LOCAL_SOUND );
+		if ( cg_novotebeeps.integer != 1 && cg_novotebeeps.integer != 3 ) {
+			trap_S_StartLocalSound( cgs.media.talkSound, CHAN_LOCAL_SOUND );
+		}
 	}
 
 	sec = ( VOTE_TIME - ( cg.time - cgs.voteTime ) ) / 1000;
@@ -2148,7 +2185,9 @@ static void CG_DrawTeamVote(void) {
 	// play a talk beep whenever it is modified
 	if ( cgs.teamVoteModified[cs_offset] ) {
 		cgs.teamVoteModified[cs_offset] = qfalse;
-		trap_S_StartLocalSound( cgs.media.talkSound, CHAN_LOCAL_SOUND );
+		if ( cg_novotebeeps.integer != 2 && cg_novotebeeps.integer != 3 ) {
+			trap_S_StartLocalSound( cgs.media.talkSound, CHAN_LOCAL_SOUND );
+		}
 	}
 
 	sec = ( VOTE_TIME - ( cg.time - cgs.teamVoteTime[cs_offset] ) ) / 1000;
